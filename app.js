@@ -44,10 +44,49 @@
       this.resizeToDisplaySize();
       this.clear(false);
 
-      canvas.addEventListener("pointerdown", (e) => this.onPointerDown(e));
-      canvas.addEventListener("pointermove", (e) => this.onPointerMove(e));
-      window.addEventListener("pointerup", () => this.onPointerUp());
-      window.addEventListener("pointercancel", () => this.onPointerUp());
+      // Mouse and touch are handled separately (rather than via Pointer
+      // Events) because Safari on iPad has a history of unreliable
+      // setPointerCapture/touch-action interaction, silently dropping
+      // pointermove during a drag. Native touch events with preventDefault
+      // are the reliable cross-browser way to draw on a canvas.
+      canvas.addEventListener("mousedown", (e) => this.startStroke(e.clientX, e.clientY));
+      canvas.addEventListener("mousemove", (e) => this.continueStroke(e.clientX, e.clientY));
+      window.addEventListener("mouseup", () => this.endStroke());
+
+      canvas.addEventListener(
+        "touchstart",
+        (e) => {
+          e.preventDefault();
+          const t = e.changedTouches[0];
+          this.startStroke(t.clientX, t.clientY);
+        },
+        { passive: false }
+      );
+      canvas.addEventListener(
+        "touchmove",
+        (e) => {
+          e.preventDefault();
+          const t = e.changedTouches[0];
+          this.continueStroke(t.clientX, t.clientY);
+        },
+        { passive: false }
+      );
+      canvas.addEventListener(
+        "touchend",
+        (e) => {
+          e.preventDefault();
+          this.endStroke();
+        },
+        { passive: false }
+      );
+      canvas.addEventListener(
+        "touchcancel",
+        (e) => {
+          e.preventDefault();
+          this.endStroke();
+        },
+        { passive: false }
+      );
 
       if (eraserBtn) {
         eraserBtn.addEventListener("click", () => {
@@ -64,13 +103,13 @@
       // width/height attributes in HTML); CSS controls the display size.
     }
 
-    getPos(e) {
+    getPos(clientX, clientY) {
       const rect = this.canvas.getBoundingClientRect();
       const scaleX = this.canvas.width / rect.width;
       const scaleY = this.canvas.height / rect.height;
       return {
-        x: (e.clientX - rect.left) * scaleX,
-        y: (e.clientY - rect.top) * scaleY,
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
       };
     }
 
@@ -79,16 +118,15 @@
       if (this.undoStack.length > 30) this.undoStack.shift();
     }
 
-    onPointerDown(e) {
+    startStroke(clientX, clientY) {
       this.drawing = true;
       this.pushUndoSnapshot();
-      this.last = this.getPos(e);
-      this.canvas.setPointerCapture(e.pointerId);
+      this.last = this.getPos(clientX, clientY);
     }
 
-    onPointerMove(e) {
+    continueStroke(clientX, clientY) {
       if (!this.drawing) return;
-      const pos = this.getPos(e);
+      const pos = this.getPos(clientX, clientY);
       const ctx = this.ctx;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
@@ -107,7 +145,7 @@
       this.last = pos;
     }
 
-    onPointerUp() {
+    endStroke() {
       this.drawing = false;
     }
 
