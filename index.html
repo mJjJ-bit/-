@@ -89,12 +89,9 @@
         </label>
 
         <label class="field-label">폴더
-          <span class="folder-input-row">
-            <select id="card-folder-select">
-              <option value="">미분류</option>
-            </select>
-            <button type="button" id="btn-add-folder">+ 새 폴더</button>
-          </span>
+          <select id="card-folder-select">
+            <option value="">미분류</option>
+          </select>
         </label>
 
         <div class="canvas-block">
@@ -124,6 +121,10 @@
         <div class="manage-list-header">
           <h2>폴더</h2>
         </div>
+        <div class="folder-add-row">
+          <input type="text" id="new-folder-input" placeholder="새 폴더 이름">
+          <button id="btn-add-folder">추가</button>
+        </div>
         <ul id="folder-list" class="folder-list"></ul>
 
         <div class="manage-list-header manage-list-header-cards">
@@ -139,6 +140,19 @@
     </div>
   </section>
 </main>
+
+<div id="import-choice-overlay" class="overlay" hidden>
+  <div class="overlay-box">
+    <p id="import-choice-text"></p>
+    <div class="action-row">
+      <button id="btn-import-merge" class="primary-btn">추가하기</button>
+      <button id="btn-import-replace">모두 교체</button>
+      <button id="btn-import-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
 
 <script src="app.js"></script>
 </body>

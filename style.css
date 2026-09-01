@@ -78,15 +78,69 @@ main { max-width: 1100px; margin: 0 auto; padding: 20px; }
   font-size: 0.9rem;
 }
 
-.folder-input-row { display: flex; gap: 8px; margin-top: 6px; }
-.folder-input-row select {
+.folder-add-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.folder-add-row input[type="text"] {
   flex: 1;
   padding: 8px 10px;
-  font-size: 1rem;
+  font-size: 0.95rem;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
-.folder-input-row button { flex-shrink: 0; white-space: nowrap; }
+.folder-add-row button { flex-shrink: 0; white-space: nowrap; }
+
+button.confirming {
+  background: var(--unknown);
+  color: white;
+  border-color: var(--unknown);
+}
+
+.folder-rename-input {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 6px;
+  font-size: 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+.overlay[hidden] { display: none; }
+
+.overlay-box {
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.overlay-box p { margin: 0 0 16px; white-space: pre-line; }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: white;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  z-index: 1100;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  max-width: 90vw;
+  text-align: center;
+}
 
 button {
   cursor: pointer;

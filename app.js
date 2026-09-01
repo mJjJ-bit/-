@@ -54,6 +54,47 @@
     return "c_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
   }
 
+  // window.alert/confirm/prompt are unreliable inside a sandboxed embed
+  // (e.g. Claude Artifacts), so all user prompts are done with in-page UI
+  // instead of the native dialogs.
+  let toastTimer = null;
+  function showToast(message) {
+    const el = document.getElementById("toast");
+    el.textContent = message;
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.hidden = true;
+    }, 2600);
+  }
+
+  // Turns a button into a two-step "click again to confirm" control so
+  // destructive actions don't need window.confirm().
+  function armConfirmButton(button, confirmLabel, action) {
+    const originalLabel = button.textContent;
+    let armed = false;
+    let revertTimer = null;
+    button.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (!armed) {
+        armed = true;
+        button.textContent = confirmLabel;
+        button.classList.add("confirming");
+        revertTimer = setTimeout(() => {
+          armed = false;
+          button.textContent = originalLabel;
+          button.classList.remove("confirming");
+        }, 3000);
+      } else {
+        clearTimeout(revertTimer);
+        armed = false;
+        button.textContent = originalLabel;
+        button.classList.remove("confirming");
+        action();
+      }
+    });
+  }
+
   // ---------- Reusable drawing pad ----------
   class DrawPad {
     constructor(canvas, penWidthInput, eraserBtn, undoBtn, clearBtn) {
@@ -330,11 +371,11 @@
     showCardAt(studyIndex);
   });
 
-  document.getElementById("btn-reset-progress").addEventListener("click", () => {
-    if (!confirm("모든 카드의 암기 기록을 초기화할까요?")) return;
+  armConfirmButton(document.getElementById("btn-reset-progress"), "정말요? (다시 클릭)", () => {
     cards.forEach((c) => (c.known = false));
     saveCards();
     refreshStudyView();
+    showToast("기록을 초기화했습니다.");
   });
 
   filterUnknownEl.addEventListener("change", () => rebuildStudyOrder(false));
@@ -399,9 +440,11 @@
   const cardCountEl = document.getElementById("card-count");
   const cardFolderSelectEl = document.getElementById("card-folder-select");
   const btnAddFolder = document.getElementById("btn-add-folder");
+  const newFolderInput = document.getElementById("new-folder-input");
   const folderListEl = document.getElementById("folder-list");
 
   let activeFolderFilter = ALL_FOLDERS_FILTER;
+  let renamingFolder = null;
 
   function populateFolderSelects() {
     const sortedFolders = folders.slice().sort((a, b) => a.localeCompare(b, "ko"));
@@ -432,28 +475,39 @@
   }
 
   function addFolder() {
-    const name = prompt("새 폴더 이름을 입력하세요.");
-    if (name === null) return;
-    const trimmed = name.trim();
-    if (!trimmed) return;
+    const trimmed = newFolderInput.value.trim();
+    if (!trimmed) {
+      showToast("폴더 이름을 입력해 주세요.");
+      newFolderInput.focus();
+      return;
+    }
     if (folders.includes(trimmed)) {
-      alert("이미 있는 폴더 이름입니다.");
+      showToast("이미 있는 폴더 이름입니다.");
       return;
     }
     folders.push(trimmed);
     saveFolders();
     populateFolderSelects();
     cardFolderSelectEl.value = trimmed;
+    newFolderInput.value = "";
     renderFolderList();
+    showToast(`"${trimmed}" 폴더를 만들었습니다.`);
   }
 
-  function renameFolder(oldName) {
-    const name = prompt("새 폴더 이름을 입력하세요.", oldName);
-    if (name === null) return;
-    const trimmed = name.trim();
-    if (!trimmed || trimmed === oldName) return;
+  btnAddFolder.addEventListener("click", addFolder);
+  newFolderInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addFolder();
+  });
+
+  function commitRenameFolder(oldName, newName) {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) {
+      renamingFolder = null;
+      renderFolderList();
+      return;
+    }
     if (folders.includes(trimmed)) {
-      alert("이미 있는 폴더 이름입니다.");
+      showToast("이미 있는 폴더 이름입니다.");
       return;
     }
     folders = folders.map((f) => (f === oldName ? trimmed : f));
@@ -461,6 +515,7 @@
       if (c.folder === oldName) c.folder = trimmed;
     });
     if (activeFolderFilter === oldName) activeFolderFilter = trimmed;
+    renamingFolder = null;
     saveFolders();
     saveCards();
     populateFolderSelects();
@@ -471,11 +526,6 @@
 
   function deleteFolder(name) {
     const count = cards.filter((c) => c.folder === name).length;
-    const msg =
-      count > 0
-        ? `"${name}" 폴더를 삭제할까요? 이 폴더의 카드 ${count}개는 미분류로 이동합니다.`
-        : `"${name}" 폴더를 삭제할까요?`;
-    if (!confirm(msg)) return;
     folders = folders.filter((f) => f !== name);
     cards.forEach((c) => {
       if (c.folder === name) c.folder = "";
@@ -487,9 +537,8 @@
     renderFolderList();
     renderCardList();
     refreshStudyView();
+    showToast(count > 0 ? `"${name}" 폴더를 삭제하고 카드 ${count}개를 미분류로 옮겼습니다.` : `"${name}" 폴더를 삭제했습니다.`);
   }
-
-  btnAddFolder.addEventListener("click", addFolder);
 
   function renderFolderList() {
     folderListEl.innerHTML = "";
@@ -507,6 +556,46 @@
       const li = document.createElement("li");
       li.className = "folder-item" + (activeFolderFilter === entry.value ? " active" : "");
 
+      const isCustomFolder = entry.value !== ALL_FOLDERS_FILTER && entry.value !== "";
+
+      if (isCustomFolder && renamingFolder === entry.value) {
+        const input = document.createElement("input");
+        input.type = "text";
+        input.className = "folder-rename-input";
+        input.value = entry.value;
+        const commit = () => commitRenameFolder(entry.value, input.value);
+        input.addEventListener("click", (e) => e.stopPropagation());
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") {
+            renamingFolder = null;
+            renderFolderList();
+          }
+        });
+        const saveBtn = document.createElement("button");
+        saveBtn.textContent = "✓";
+        saveBtn.title = "저장";
+        saveBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          commit();
+        });
+        const cancelBtn = document.createElement("button");
+        cancelBtn.textContent = "✕";
+        cancelBtn.title = "취소";
+        cancelBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          renamingFolder = null;
+          renderFolderList();
+        });
+        li.appendChild(input);
+        li.appendChild(saveBtn);
+        li.appendChild(cancelBtn);
+        folderListEl.appendChild(li);
+        input.focus();
+        input.select();
+        return;
+      }
+
       const nameEl = document.createElement("span");
       nameEl.className = "folder-name";
       nameEl.textContent = entry.label;
@@ -518,7 +607,6 @@
       li.appendChild(nameEl);
       li.appendChild(countEl);
 
-      const isCustomFolder = entry.value !== ALL_FOLDERS_FILTER && entry.value !== "";
       if (isCustomFolder) {
         const actions = document.createElement("div");
         actions.className = "item-actions";
@@ -527,15 +615,13 @@
         renameBtn.title = "이름 변경";
         renameBtn.addEventListener("click", (e) => {
           e.stopPropagation();
-          renameFolder(entry.value);
+          renamingFolder = entry.value;
+          renderFolderList();
         });
         const delBtn = document.createElement("button");
         delBtn.textContent = "×";
         delBtn.title = "삭제";
-        delBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          deleteFolder(entry.value);
-        });
+        armConfirmButton(delBtn, "정말?", () => deleteFolder(entry.value));
         actions.appendChild(renameBtn);
         actions.appendChild(delBtn);
         li.appendChild(actions);
@@ -606,14 +692,14 @@
 
   async function handlePhotoFile(file) {
     if (!file || !file.type.startsWith("image/")) {
-      alert("이미지 파일을 선택해 주세요.");
+      showToast("이미지 파일을 선택해 주세요.");
       return;
     }
     try {
       const dataURL = await loadPhotoAsDataURL(file);
       setAnswerPhoto(dataURL);
     } catch (e) {
-      alert("사진을 불러오지 못했습니다.");
+      showToast("사진을 불러오지 못했습니다.");
     }
   }
 
@@ -659,12 +745,12 @@
   btnSaveCard.addEventListener("click", () => {
     const name = cardNameInput.value.trim();
     if (!name) {
-      alert("구조 이름을 입력해 주세요.");
+      showToast("구조 이름을 입력해 주세요.");
       cardNameInput.focus();
       return;
     }
     if (!currentAnswerImage) {
-      alert("정답 구조 사진을 업로드해 주세요.");
+      showToast("정답 구조 사진을 업로드해 주세요.");
       return;
     }
     const folder = cardFolderSelectEl.value;
@@ -709,9 +795,6 @@
   }
 
   function deleteCard(id) {
-    const card = cards.find((c) => c.id === id);
-    if (!card) return;
-    if (!confirm(`"${card.name}" 카드를 삭제할까요?`)) return;
     cards = cards.filter((c) => c.id !== id);
     saveCards();
     if (editingId === id) resetEditor();
@@ -756,7 +839,7 @@
       editBtn.addEventListener("click", () => editCard(card.id));
       const delBtn = document.createElement("button");
       delBtn.textContent = "삭제";
-      delBtn.addEventListener("click", () => deleteCard(card.id));
+      armConfirmButton(delBtn, "정말?", () => deleteCard(card.id));
       actions.appendChild(editBtn);
       actions.appendChild(delBtn);
 
@@ -782,6 +865,45 @@
   });
 
   const importFileInput = document.getElementById("import-file");
+  const importChoiceOverlay = document.getElementById("import-choice-overlay");
+  const importChoiceText = document.getElementById("import-choice-text");
+  const btnImportMerge = document.getElementById("btn-import-merge");
+  const btnImportReplace = document.getElementById("btn-import-replace");
+  const btnImportCancel = document.getElementById("btn-import-cancel");
+
+  let pendingImport = null;
+
+  function finishImport(merge) {
+    if (!pendingImport) return;
+    const { validCards, importedFolders } = pendingImport;
+    pendingImport = null;
+    importChoiceOverlay.hidden = true;
+
+    cards = merge ? cards.concat(validCards) : validCards;
+
+    const folderSet = new Set(merge ? folders : []);
+    importedFolders.forEach((f) => folderSet.add(f));
+    cards.forEach((c) => {
+      if (c.folder) folderSet.add(c.folder);
+    });
+    folders = Array.from(folderSet);
+
+    saveCards();
+    saveFolders();
+    populateFolderSelects();
+    renderFolderList();
+    renderCardList();
+    refreshStudyView();
+    showToast(`카드 ${validCards.length}개를 불러왔습니다.`);
+  }
+
+  btnImportMerge.addEventListener("click", () => finishImport(true));
+  btnImportReplace.addEventListener("click", () => finishImport(false));
+  btnImportCancel.addEventListener("click", () => {
+    pendingImport = null;
+    importChoiceOverlay.hidden = true;
+  });
+
   document.getElementById("btn-import").addEventListener("click", () => importFileInput.click());
   importFileInput.addEventListener("change", () => {
     const file = importFileInput.files[0];
@@ -802,9 +924,6 @@
           throw new Error("invalid format");
         }
         const validCards = importedCards.filter((c) => c && typeof c.name === "string" && typeof c.answerImage === "string");
-        const merge = confirm(
-          `${validCards.length}개의 카드를 불러왔습니다.\n확인: 기존 카드에 추가\n취소: 기존 카드를 모두 교체`
-        );
         validCards.forEach((c) => {
           if (!c.id) c.id = uid();
           if (typeof c.known !== "boolean") c.known = false;
@@ -812,23 +931,12 @@
           if (typeof c.createdAt !== "number") c.createdAt = Date.now();
           if (typeof c.folder !== "string") c.folder = "";
         });
-        cards = merge ? cards.concat(validCards) : validCards;
 
-        const folderSet = new Set(merge ? folders : []);
-        importedFolders.forEach((f) => folderSet.add(f));
-        cards.forEach((c) => {
-          if (c.folder) folderSet.add(c.folder);
-        });
-        folders = Array.from(folderSet);
-
-        saveCards();
-        saveFolders();
-        populateFolderSelects();
-        renderFolderList();
-        renderCardList();
-        refreshStudyView();
+        pendingImport = { validCards, importedFolders };
+        importChoiceText.textContent = `카드 ${validCards.length}개를 불러왔습니다. 기존 카드에 추가할까요, 모두 교체할까요?`;
+        importChoiceOverlay.hidden = false;
       } catch (e) {
-        alert("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
+        showToast("파일을 읽을 수 없습니다. 올바른 JSON 파일인지 확인해 주세요.");
       } finally {
         importFileInput.value = "";
       }
