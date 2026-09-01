@@ -30,7 +30,16 @@
   }
 
   function saveCards() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    } catch (e) {
+      // An unguarded QuotaExceededError here (common on iOS Safari, which
+      // has a much tighter localStorage limit than desktop/Android Chrome)
+      // would otherwise abort whatever click handler called saveCards()
+      // partway through, silently breaking the rest of that action.
+      console.error("Failed to save cards", e);
+      showToast("저장 공간이 부족해서 저장하지 못했습니다. 사진이 큰 카드를 정리해 보세요.");
+    }
   }
 
   function loadFolders() {
@@ -47,7 +56,12 @@
   }
 
   function saveFolders() {
-    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+    try {
+      localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+    } catch (e) {
+      console.error("Failed to save folders", e);
+      showToast("저장 공간이 부족해서 저장하지 못했습니다.");
+    }
   }
 
   function uid() {
@@ -404,20 +418,19 @@
   btnReveal.addEventListener("click", () => {
     if (studyOrder.length === 0) return;
     const card = cards[studyOrder[studyIndex]];
-    card.seenCount = (card.seenCount || 0) + 1;
-    saveCards();
     answerImage.src = card.answerImage;
     answerBlock.hidden = false;
     btnReveal.hidden = true;
     btnMarkKnow.hidden = false;
     btnMarkUnknown.hidden = false;
+    card.seenCount = (card.seenCount || 0) + 1;
+    saveCards();
   });
 
   function markAndAdvance(known) {
     if (studyOrder.length === 0) return;
     const card = cards[studyOrder[studyIndex]];
     card.known = known;
-    saveCards();
     const wasFiltered = filterUnknownEl.checked;
     if (wasFiltered) {
       rebuildStudyOrder(false);
@@ -426,6 +439,7 @@
       const scoped = folderScopedCards();
       deckProgressEl.textContent = `${scoped.filter((c) => c.known).length} / ${scoped.length} 암기 완료`;
     }
+    saveCards();
   }
 
   btnMarkKnow.addEventListener("click", () => markAndAdvance(true));
