@@ -306,15 +306,6 @@
   btnMarkUnknown.addEventListener("click", () => markAndAdvance(false));
 
   // ---------- Manage tab ----------
-  const answerCanvas = document.getElementById("answer-canvas");
-  const answerPad = new DrawPad(
-    answerCanvas,
-    document.getElementById("answer-pen-width"),
-    document.getElementById("btn-answer-eraser"),
-    document.getElementById("btn-answer-undo"),
-    document.getElementById("btn-answer-clear")
-  );
-
   const cardNameInput = document.getElementById("card-name-input");
   const editorTitle = document.getElementById("editor-title");
   const btnSaveCard = document.getElementById("btn-save-card");
@@ -322,13 +313,105 @@
   const cardListEl = document.getElementById("card-list");
   const cardCountEl = document.getElementById("card-count");
 
+  const photoDropZone = document.getElementById("photo-drop-zone");
+  const photoPlaceholder = document.getElementById("photo-placeholder");
+  const answerPhotoPreview = document.getElementById("answer-photo-preview");
+  const answerPhotoInput = document.getElementById("answer-photo-input");
+  const btnChoosePhoto = document.getElementById("btn-choose-photo");
+  const btnRemovePhoto = document.getElementById("btn-remove-photo");
+
   let editingId = null;
+  let currentAnswerImage = null;
+
+  // Downscale + re-encode an uploaded photo so a multi-MB phone photo
+  // doesn't blow through localStorage's per-origin quota.
+  function loadPhotoAsDataURL(file, maxDim = 1000, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("invalid image"));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setAnswerPhoto(dataURL) {
+    currentAnswerImage = dataURL;
+    if (dataURL) {
+      answerPhotoPreview.src = dataURL;
+      answerPhotoPreview.hidden = false;
+      photoPlaceholder.hidden = true;
+      btnRemovePhoto.hidden = false;
+    } else {
+      answerPhotoPreview.src = "";
+      answerPhotoPreview.hidden = true;
+      photoPlaceholder.hidden = false;
+      btnRemovePhoto.hidden = true;
+    }
+  }
+
+  async function handlePhotoFile(file) {
+    if (!file || !file.type.startsWith("image/")) {
+      alert("이미지 파일을 선택해 주세요.");
+      return;
+    }
+    try {
+      const dataURL = await loadPhotoAsDataURL(file);
+      setAnswerPhoto(dataURL);
+    } catch (e) {
+      alert("사진을 불러오지 못했습니다.");
+    }
+  }
+
+  photoDropZone.addEventListener("click", () => answerPhotoInput.click());
+  btnChoosePhoto.addEventListener("click", () => answerPhotoInput.click());
+  answerPhotoInput.addEventListener("change", () => {
+    if (answerPhotoInput.files[0]) handlePhotoFile(answerPhotoInput.files[0]);
+    answerPhotoInput.value = "";
+  });
+
+  btnRemovePhoto.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setAnswerPhoto(null);
+  });
+
+  ["dragenter", "dragover"].forEach((evt) =>
+    photoDropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      photoDropZone.classList.add("drag-over");
+    })
+  );
+  ["dragleave", "drop"].forEach((evt) =>
+    photoDropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      photoDropZone.classList.remove("drag-over");
+    })
+  );
+  photoDropZone.addEventListener("drop", (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) handlePhotoFile(file);
+  });
 
   function resetEditor() {
     editingId = null;
     cardNameInput.value = "";
-    answerPad.clear(false);
-    answerPad.undoStack = [];
+    setAnswerPhoto(null);
     editorTitle.textContent = "새 카드 만들기";
     btnCancelEdit.hidden = true;
   }
@@ -340,23 +423,22 @@
       cardNameInput.focus();
       return;
     }
-    if (answerPad.isBlank()) {
-      alert("정답 구조를 그려 주세요.");
+    if (!currentAnswerImage) {
+      alert("정답 구조 사진을 업로드해 주세요.");
       return;
     }
-    const imageData = answerPad.toDataURL();
 
     if (editingId) {
       const card = cards.find((c) => c.id === editingId);
       if (card) {
         card.name = name;
-        card.answerImage = imageData;
+        card.answerImage = currentAnswerImage;
       }
     } else {
       cards.push({
         id: uid(),
         name,
-        answerImage: imageData,
+        answerImage: currentAnswerImage,
         createdAt: Date.now(),
         known: false,
         seenCount: 0,
@@ -377,12 +459,7 @@
     cardNameInput.value = card.name;
     editorTitle.textContent = "카드 수정";
     btnCancelEdit.hidden = false;
-    const img = new Image();
-    img.onload = () => {
-      answerPad.clear(false);
-      answerPad.ctx.drawImage(img, 0, 0, answerCanvas.width, answerCanvas.height);
-    };
-    img.src = card.answerImage;
+    setAnswerPhoto(card.answerImage);
     cardNameInput.focus();
   }
 
