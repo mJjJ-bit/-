@@ -2,11 +2,16 @@
   "use strict";
 
   const STORAGE_KEY = "synthCards.v1";
+  const FOLDERS_KEY = "synthFolders.v1";
+  const ALL_FOLDERS_FILTER = "__all__";
 
-  /** @typedef {{id:string,name:string,answerImage:string,createdAt:number,known:boolean,seenCount:number}} Card */
+  /** @typedef {{id:string,name:string,answerImage:string,createdAt:number,known:boolean,seenCount:number,folder:string}} Card */
 
   /** @type {Card[]} */
   let cards = loadCards();
+
+  /** @type {string[]} */
+  let folders = loadFolders();
 
   function loadCards() {
     try {
@@ -14,6 +19,9 @@
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed)) return [];
+      parsed.forEach((c) => {
+        if (typeof c.folder !== "string") c.folder = "";
+      });
       return parsed;
     } catch (e) {
       console.error("Failed to load cards", e);
@@ -23,6 +31,23 @@
 
   function saveCards() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+  }
+
+  function loadFolders() {
+    try {
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((f) => typeof f === "string");
+    } catch (e) {
+      console.error("Failed to load folders", e);
+      return [];
+    }
+  }
+
+  function saveFolders() {
+    localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
   }
 
   function uid() {
@@ -206,6 +231,7 @@
   );
 
   const emptyDeckMsg = document.getElementById("empty-deck-msg");
+  const emptyFolderMsg = document.getElementById("empty-folder-msg");
   const studyCardEl = document.getElementById("study-card");
   const cardNameEl = document.getElementById("card-name");
   const answerBlock = document.getElementById("answer-block");
@@ -216,15 +242,23 @@
   const deckProgressEl = document.getElementById("deck-progress");
   const cardPositionEl = document.getElementById("card-position");
   const filterUnknownEl = document.getElementById("filter-unknown");
+  const studyFolderFilterEl = document.getElementById("study-folder-filter");
 
   let studyOrder = [];
   let studyIndex = 0;
 
+  function folderScopedCards() {
+    const sel = studyFolderFilterEl.value;
+    if (sel === ALL_FOLDERS_FILTER) return cards;
+    return cards.filter((c) => (c.folder || "") === sel);
+  }
+
   function currentDeck() {
+    const scoped = folderScopedCards();
     if (filterUnknownEl.checked) {
-      return cards.filter((c) => !c.known);
+      return scoped.filter((c) => !c.known);
     }
-    return cards;
+    return scoped;
   }
 
   function rebuildStudyOrder(keepPosition) {
@@ -241,12 +275,14 @@
   }
 
   function refreshStudyView() {
+    const scoped = folderScopedCards();
     const deck = currentDeck();
     studyOrder = deck.map((c) => cards.indexOf(c));
     if (studyIndex >= studyOrder.length) studyIndex = 0;
 
     if (cards.length === 0) {
       emptyDeckMsg.hidden = false;
+      emptyFolderMsg.hidden = true;
       studyCardEl.hidden = true;
       deckProgressEl.textContent = "0 / 0";
       cardPositionEl.textContent = "";
@@ -254,16 +290,25 @@
     }
     emptyDeckMsg.hidden = true;
 
+    if (scoped.length === 0) {
+      emptyFolderMsg.hidden = false;
+      studyCardEl.hidden = true;
+      deckProgressEl.textContent = "0 / 0";
+      cardPositionEl.textContent = "";
+      return;
+    }
+    emptyFolderMsg.hidden = true;
+
     if (studyOrder.length === 0) {
       studyCardEl.hidden = true;
-      deckProgressEl.textContent = "0 / 0 (모르는 카드 없음)";
+      deckProgressEl.textContent = `0 / ${scoped.length} (모르는 카드 없음)`;
       cardPositionEl.textContent = "";
       return;
     }
 
     studyCardEl.hidden = false;
-    const knownCount = cards.filter((c) => c.known).length;
-    deckProgressEl.textContent = `${knownCount} / ${cards.length} 암기 완료`;
+    const knownCount = scoped.filter((c) => c.known).length;
+    deckProgressEl.textContent = `${knownCount} / ${scoped.length} 암기 완료`;
     cardPositionEl.textContent = `${studyIndex + 1} / ${studyOrder.length}`;
 
     const card = cards[studyOrder[studyIndex]];
@@ -293,6 +338,7 @@
   });
 
   filterUnknownEl.addEventListener("change", () => rebuildStudyOrder(false));
+  studyFolderFilterEl.addEventListener("change", () => rebuildStudyOrder(false));
 
   function showCardAt(idx) {
     if (studyOrder.length === 0) {
@@ -336,7 +382,8 @@
       rebuildStudyOrder(false);
     } else {
       showCardAt(studyIndex + 1);
-      deckProgressEl.textContent = `${cards.filter((c) => c.known).length} / ${cards.length} 암기 완료`;
+      const scoped = folderScopedCards();
+      deckProgressEl.textContent = `${scoped.filter((c) => c.known).length} / ${scoped.length} 암기 완료`;
     }
   }
 
@@ -350,6 +397,159 @@
   const btnCancelEdit = document.getElementById("btn-cancel-edit");
   const cardListEl = document.getElementById("card-list");
   const cardCountEl = document.getElementById("card-count");
+  const cardFolderSelectEl = document.getElementById("card-folder-select");
+  const btnAddFolder = document.getElementById("btn-add-folder");
+  const folderListEl = document.getElementById("folder-list");
+
+  let activeFolderFilter = ALL_FOLDERS_FILTER;
+
+  function populateFolderSelects() {
+    const sortedFolders = folders.slice().sort((a, b) => a.localeCompare(b, "ko"));
+
+    const prevCardFolder = cardFolderSelectEl.value;
+    cardFolderSelectEl.innerHTML = '<option value="">미분류</option>';
+    sortedFolders.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f;
+      opt.textContent = f;
+      cardFolderSelectEl.appendChild(opt);
+    });
+    if ([...cardFolderSelectEl.options].some((o) => o.value === prevCardFolder)) {
+      cardFolderSelectEl.value = prevCardFolder;
+    }
+
+    const prevStudyFilter = studyFolderFilterEl.value;
+    studyFolderFilterEl.innerHTML = '<option value="__all__">전체</option><option value="">미분류</option>';
+    sortedFolders.forEach((f) => {
+      const opt = document.createElement("option");
+      opt.value = f;
+      opt.textContent = f;
+      studyFolderFilterEl.appendChild(opt);
+    });
+    if ([...studyFolderFilterEl.options].some((o) => o.value === prevStudyFilter)) {
+      studyFolderFilterEl.value = prevStudyFilter;
+    }
+  }
+
+  function addFolder() {
+    const name = prompt("새 폴더 이름을 입력하세요.");
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    if (folders.includes(trimmed)) {
+      alert("이미 있는 폴더 이름입니다.");
+      return;
+    }
+    folders.push(trimmed);
+    saveFolders();
+    populateFolderSelects();
+    cardFolderSelectEl.value = trimmed;
+    renderFolderList();
+  }
+
+  function renameFolder(oldName) {
+    const name = prompt("새 폴더 이름을 입력하세요.", oldName);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === oldName) return;
+    if (folders.includes(trimmed)) {
+      alert("이미 있는 폴더 이름입니다.");
+      return;
+    }
+    folders = folders.map((f) => (f === oldName ? trimmed : f));
+    cards.forEach((c) => {
+      if (c.folder === oldName) c.folder = trimmed;
+    });
+    if (activeFolderFilter === oldName) activeFolderFilter = trimmed;
+    saveFolders();
+    saveCards();
+    populateFolderSelects();
+    renderFolderList();
+    renderCardList();
+    refreshStudyView();
+  }
+
+  function deleteFolder(name) {
+    const count = cards.filter((c) => c.folder === name).length;
+    const msg =
+      count > 0
+        ? `"${name}" 폴더를 삭제할까요? 이 폴더의 카드 ${count}개는 미분류로 이동합니다.`
+        : `"${name}" 폴더를 삭제할까요?`;
+    if (!confirm(msg)) return;
+    folders = folders.filter((f) => f !== name);
+    cards.forEach((c) => {
+      if (c.folder === name) c.folder = "";
+    });
+    if (activeFolderFilter === name) activeFolderFilter = ALL_FOLDERS_FILTER;
+    saveFolders();
+    saveCards();
+    populateFolderSelects();
+    renderFolderList();
+    renderCardList();
+    refreshStudyView();
+  }
+
+  btnAddFolder.addEventListener("click", addFolder);
+
+  function renderFolderList() {
+    folderListEl.innerHTML = "";
+
+    const specialEntries = [
+      { value: ALL_FOLDERS_FILTER, label: "전체", count: cards.length },
+      { value: "", label: "미분류", count: cards.filter((c) => !c.folder).length },
+    ];
+    const folderEntries = folders
+      .slice()
+      .sort((a, b) => a.localeCompare(b, "ko"))
+      .map((f) => ({ value: f, label: f, count: cards.filter((c) => c.folder === f).length }));
+
+    [...specialEntries, ...folderEntries].forEach((entry) => {
+      const li = document.createElement("li");
+      li.className = "folder-item" + (activeFolderFilter === entry.value ? " active" : "");
+
+      const nameEl = document.createElement("span");
+      nameEl.className = "folder-name";
+      nameEl.textContent = entry.label;
+
+      const countEl = document.createElement("span");
+      countEl.className = "folder-count";
+      countEl.textContent = String(entry.count);
+
+      li.appendChild(nameEl);
+      li.appendChild(countEl);
+
+      const isCustomFolder = entry.value !== ALL_FOLDERS_FILTER && entry.value !== "";
+      if (isCustomFolder) {
+        const actions = document.createElement("div");
+        actions.className = "item-actions";
+        const renameBtn = document.createElement("button");
+        renameBtn.textContent = "✎";
+        renameBtn.title = "이름 변경";
+        renameBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          renameFolder(entry.value);
+        });
+        const delBtn = document.createElement("button");
+        delBtn.textContent = "×";
+        delBtn.title = "삭제";
+        delBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          deleteFolder(entry.value);
+        });
+        actions.appendChild(renameBtn);
+        actions.appendChild(delBtn);
+        li.appendChild(actions);
+      }
+
+      li.addEventListener("click", () => {
+        activeFolderFilter = entry.value;
+        renderFolderList();
+        renderCardList();
+      });
+
+      folderListEl.appendChild(li);
+    });
+  }
 
   const photoDropZone = document.getElementById("photo-drop-zone");
   const photoPlaceholder = document.getElementById("photo-placeholder");
@@ -452,6 +652,8 @@
     setAnswerPhoto(null);
     editorTitle.textContent = "새 카드 만들기";
     btnCancelEdit.hidden = true;
+    cardFolderSelectEl.value =
+      activeFolderFilter !== ALL_FOLDERS_FILTER && activeFolderFilter !== "" ? activeFolderFilter : "";
   }
 
   btnSaveCard.addEventListener("click", () => {
@@ -465,12 +667,14 @@
       alert("정답 구조 사진을 업로드해 주세요.");
       return;
     }
+    const folder = cardFolderSelectEl.value;
 
     if (editingId) {
       const card = cards.find((c) => c.id === editingId);
       if (card) {
         card.name = name;
         card.answerImage = currentAnswerImage;
+        card.folder = folder;
       }
     } else {
       cards.push({
@@ -480,10 +684,12 @@
         createdAt: Date.now(),
         known: false,
         seenCount: 0,
+        folder,
       });
     }
     saveCards();
     resetEditor();
+    renderFolderList();
     renderCardList();
     refreshStudyView();
   });
@@ -498,6 +704,7 @@
     editorTitle.textContent = "카드 수정";
     btnCancelEdit.hidden = false;
     setAnswerPhoto(card.answerImage);
+    cardFolderSelectEl.value = card.folder || "";
     cardNameInput.focus();
   }
 
@@ -508,14 +715,20 @@
     cards = cards.filter((c) => c.id !== id);
     saveCards();
     if (editingId === id) resetEditor();
+    renderFolderList();
     renderCardList();
     refreshStudyView();
   }
 
   function renderCardList() {
-    cardCountEl.textContent = String(cards.length);
+    const visibleCards =
+      activeFolderFilter === ALL_FOLDERS_FILTER
+        ? cards
+        : cards.filter((c) => (c.folder || "") === activeFolderFilter);
+
+    cardCountEl.textContent = String(visibleCards.length);
     cardListEl.innerHTML = "";
-    cards.forEach((card) => {
+    visibleCards.forEach((card) => {
       const li = document.createElement("li");
       li.className = "card-list-item";
 
@@ -530,7 +743,9 @@
       nameEl.textContent = card.name;
       const statEl = document.createElement("div");
       statEl.className = "stat";
-      statEl.textContent = (card.known ? "✅ 암기 완료" : "미암기") + ` · 확인 ${card.seenCount || 0}회`;
+      const folderLabel = card.folder ? `${card.folder} · ` : "";
+      statEl.textContent =
+        folderLabel + (card.known ? "✅ 암기 완료" : "미암기") + ` · 확인 ${card.seenCount || 0}회`;
       info.appendChild(nameEl);
       info.appendChild(statEl);
 
@@ -554,7 +769,8 @@
 
   // ---------- Import / Export ----------
   document.getElementById("btn-export").addEventListener("click", () => {
-    const blob = new Blob([JSON.stringify(cards, null, 2)], { type: "application/json" });
+    const payload = { version: 1, cards, folders };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -574,8 +790,18 @@
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result));
-        if (!Array.isArray(parsed)) throw new Error("invalid format");
-        const validCards = parsed.filter((c) => c && typeof c.name === "string" && typeof c.answerImage === "string");
+        let importedCards;
+        let importedFolders;
+        if (Array.isArray(parsed)) {
+          importedCards = parsed;
+          importedFolders = [];
+        } else if (parsed && Array.isArray(parsed.cards)) {
+          importedCards = parsed.cards;
+          importedFolders = Array.isArray(parsed.folders) ? parsed.folders.filter((f) => typeof f === "string") : [];
+        } else {
+          throw new Error("invalid format");
+        }
+        const validCards = importedCards.filter((c) => c && typeof c.name === "string" && typeof c.answerImage === "string");
         const merge = confirm(
           `${validCards.length}개의 카드를 불러왔습니다.\n확인: 기존 카드에 추가\n취소: 기존 카드를 모두 교체`
         );
@@ -584,9 +810,21 @@
           if (typeof c.known !== "boolean") c.known = false;
           if (typeof c.seenCount !== "number") c.seenCount = 0;
           if (typeof c.createdAt !== "number") c.createdAt = Date.now();
+          if (typeof c.folder !== "string") c.folder = "";
         });
         cards = merge ? cards.concat(validCards) : validCards;
+
+        const folderSet = new Set(merge ? folders : []);
+        importedFolders.forEach((f) => folderSet.add(f));
+        cards.forEach((c) => {
+          if (c.folder) folderSet.add(c.folder);
+        });
+        folders = Array.from(folderSet);
+
         saveCards();
+        saveFolders();
+        populateFolderSelects();
+        renderFolderList();
         renderCardList();
         refreshStudyView();
       } catch (e) {
@@ -599,6 +837,8 @@
   });
 
   // ---------- Init ----------
+  populateFolderSelects();
+  renderFolderList();
   renderCardList();
   refreshStudyView();
 })();

@@ -20,6 +20,12 @@
   <section id="tab-study" class="tab-panel active">
     <div class="study-toolbar">
       <span id="deck-progress">0 / 0</span>
+      <label class="select-label">폴더
+        <select id="study-folder-filter">
+          <option value="__all__">전체</option>
+          <option value="">미분류</option>
+        </select>
+      </label>
       <label class="checkbox-label">
         <input type="checkbox" id="filter-unknown"> 모르는 카드만
       </label>
@@ -29,6 +35,9 @@
 
     <div id="empty-deck-msg" class="empty-msg" hidden>
       아직 카드가 없습니다. <strong>카드 관리</strong> 탭에서 먼저 카드를 만들어 주세요.
+    </div>
+    <div id="empty-folder-msg" class="empty-msg" hidden>
+      이 폴더에는 카드가 없습니다.
     </div>
 
     <div id="study-card" class="card-area" hidden>
@@ -79,6 +88,15 @@
           <input type="text" id="card-name-input" placeholder="예: TBSCl, Boc2O, Grignard 시약 ...">
         </label>
 
+        <label class="field-label">폴더
+          <span class="folder-input-row">
+            <select id="card-folder-select">
+              <option value="">미분류</option>
+            </select>
+            <button type="button" id="btn-add-folder">+ 새 폴더</button>
+          </span>
+        </label>
+
         <div class="canvas-block">
           <div class="canvas-block-title">정답 구조 사진</div>
           <div id="photo-drop-zone" class="photo-drop-zone">
@@ -104,6 +122,11 @@
 
       <div class="manage-list">
         <div class="manage-list-header">
+          <h2>폴더</h2>
+        </div>
+        <ul id="folder-list" class="folder-list"></ul>
+
+        <div class="manage-list-header manage-list-header-cards">
           <h2>카드 목록 (<span id="card-count">0</span>)</h2>
           <div class="io-buttons">
             <button id="btn-export">내보내기</button>
