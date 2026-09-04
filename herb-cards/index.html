@@ -134,6 +134,7 @@
     padding:22px 20px;
     display:flex;
     flex-direction:column;
+    overflow-y:auto;
   }
   .face.back{transform:rotateY(180deg);}
   .face .corner{
@@ -356,6 +357,52 @@
   .field textarea{min-height:52px;}
   .field.mnemonic-field textarea{min-height:70px;}
   .field.mnemonic-field label{color:#8a6a2e;}
+  .photo-drop-zone{
+    position:relative;
+    border:1.5px dashed var(--line);
+    border-radius:8px;
+    background:#fff;
+    min-height:120px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    overflow:hidden;
+    cursor:pointer;
+  }
+  .photo-drop-zone.drag-over{border-color:var(--sage); background:var(--sage-dim);}
+  .photo-drop-zone img{
+    width:100%;
+    max-height:220px;
+    object-fit:contain;
+    display:block;
+  }
+  .photo-placeholder{
+    text-align:center;
+    color:#9a8f78;
+    font-size:0.8rem;
+    padding:20px;
+  }
+  .photo-placeholder-icon{font-size:1.6rem; display:block; margin-bottom:4px;}
+  .photo-actions{display:flex; gap:8px; margin-top:8px;}
+  .photo-actions button{
+    flex:1;
+    padding:8px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-family:inherit;
+    font-size:0.8rem;
+    cursor:pointer;
+    color:var(--forest-2);
+  }
+  .card-image{
+    width:100%;
+    max-height:150px;
+    object-fit:contain;
+    border-radius:6px;
+    margin-bottom:12px;
+    background:var(--paper-dim);
+  }
   .modal-actions{
     display:flex;
     gap:10px;
@@ -558,6 +605,21 @@
       <input type="text" id="f-category" placeholder="예: 신량해표약">
     </div>
     <div class="field">
+      <label>사진 / 그림</label>
+      <div id="photo-drop-zone" class="photo-drop-zone">
+        <img id="photo-preview" alt="카드 사진" hidden>
+        <div id="photo-placeholder" class="photo-placeholder">
+          <span class="photo-placeholder-icon">📷</span>
+          <p>클릭하거나 사진을 끌어다 놓으세요</p>
+        </div>
+      </div>
+      <input type="file" id="f-photo-input" accept="image/*" hidden>
+      <div class="photo-actions">
+        <button type="button" id="btn-choose-photo">사진 선택</button>
+        <button type="button" id="btn-remove-photo" hidden>사진 제거</button>
+      </div>
+    </div>
+    <div class="field">
       <label>주요 성분</label>
       <textarea id="f-compounds" placeholder="예: puerarin, daidzein, genistin, formononetin"></textarea>
     </div>
@@ -591,6 +653,7 @@
   let currentStudyCard = null;
   let studyQueue = [];
   let ignoreFilters = false;
+  let currentImage = null;
 
   // ---------- storage ----------
   function loadCards(){
@@ -740,6 +803,7 @@
     const back = document.getElementById('back-face');
     back.innerHTML = `
       <div class="corner"></div>
+      ${card.image ? `<img class="card-image" src="${card.image}" alt="${escapeHtml(card.name||'카드 사진')}">`:''}
       ${card.plant ? `<div class="back-field"><div class="label">기원식물</div><div class="value"><i>${escapeHtml(card.plant)}</i></div></div>`:''}
       ${card.latin ? `<div class="back-field"><div class="label">학명</div><div class="value"><i>${escapeHtml(card.latin)}</i></div></div>`:''}
       ${card.compounds ? `<div class="back-field"><div class="label">주요 성분</div><div class="value">${escapeHtml(card.compounds)}</div></div>`:''}
@@ -810,10 +874,100 @@
   const overlay = document.getElementById('modal-overlay');
   const fields = ['name','plant','latin','family','category','compounds','pharm','mnemonic'];
 
+  // ---------- photo field ----------
+  const photoDropZone = document.getElementById('photo-drop-zone');
+  const photoPreview = document.getElementById('photo-preview');
+  const photoPlaceholder = document.getElementById('photo-placeholder');
+  const photoInput = document.getElementById('f-photo-input');
+  const btnChoosePhoto = document.getElementById('btn-choose-photo');
+  const btnRemovePhoto = document.getElementById('btn-remove-photo');
+
+  // 큰 사진을 줄여서 localStorage 용량을 아낍니다.
+  function loadPhotoAsDataURL(file, maxDim = 900, quality = 0.82){
+    return new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onerror = () => reject(reader.error);
+      reader.onload = () => {
+        const img = new Image();
+        img.onerror = () => reject(new Error('invalid image'));
+        img.onload = () => {
+          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement('canvas');
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#fff';
+          ctx.fillRect(0,0,w,h);
+          ctx.drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function setPhoto(dataURL){
+    currentImage = dataURL || null;
+    if(currentImage){
+      photoPreview.src = currentImage;
+      photoPreview.hidden = false;
+      photoPlaceholder.hidden = true;
+      btnRemovePhoto.hidden = false;
+    } else {
+      photoPreview.src = '';
+      photoPreview.hidden = true;
+      photoPlaceholder.hidden = false;
+      btnRemovePhoto.hidden = true;
+    }
+  }
+
+  async function handlePhotoFile(file){
+    if(!file || !file.type.startsWith('image/')){
+      showToast('이미지 파일을 선택해주세요');
+      return;
+    }
+    try{
+      const dataURL = await loadPhotoAsDataURL(file);
+      setPhoto(dataURL);
+    }catch(e){
+      showToast('사진을 불러오지 못했어요');
+    }
+  }
+
+  photoDropZone.addEventListener('click', ()=> photoInput.click());
+  btnChoosePhoto.addEventListener('click', ()=> photoInput.click());
+  photoInput.addEventListener('change', ()=>{
+    if(photoInput.files[0]) handlePhotoFile(photoInput.files[0]);
+    photoInput.value = '';
+  });
+  btnRemovePhoto.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    setPhoto(null);
+  });
+  ['dragenter','dragover'].forEach(evt=>{
+    photoDropZone.addEventListener(evt, (e)=>{
+      e.preventDefault();
+      photoDropZone.classList.add('drag-over');
+    });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    photoDropZone.addEventListener(evt, (e)=>{
+      e.preventDefault();
+      photoDropZone.classList.remove('drag-over');
+    });
+  });
+  photoDropZone.addEventListener('drop', (e)=>{
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) handlePhotoFile(file);
+  });
+
   function openAddModal(){
     editingId = null;
     document.getElementById('modal-title').textContent = '새 카드 추가';
     fields.forEach(f=> document.getElementById('f-'+f).value = '');
+    setPhoto(null);
     document.getElementById('btn-delete').style.display = 'none';
     overlay.classList.add('open');
   }
@@ -824,6 +978,7 @@
     editingId = id;
     document.getElementById('modal-title').textContent = '카드 편집';
     fields.forEach(f=> document.getElementById('f-'+f).value = card[f] || '');
+    setPhoto(card.image || null);
     document.getElementById('btn-delete').style.display = 'block';
     overlay.classList.add('open');
   }
@@ -846,10 +1001,12 @@
     if(editingId){
       const card = cards.find(c=>c.id===editingId);
       fields.forEach(f=> card[f] = document.getElementById('f-'+f).value.trim());
+      card.image = currentImage;
     } else {
       const now = new Date().toISOString();
       const newCard = { id: cryptoId(), box:0, due: now, createdAt: now };
       fields.forEach(f=> newCard[f] = document.getElementById('f-'+f).value.trim());
+      newCard.image = currentImage;
       cards.push(newCard);
     }
     saveCards();
