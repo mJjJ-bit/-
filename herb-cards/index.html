@@ -576,9 +576,10 @@
       </div>
       <div class="backup-section">
         <h3>내보내기</h3>
-        <p>아래 내용을 전체 복사해서 메모장 등에 저장해두세요.</p>
+        <p>JSON 파일로 다운로드하거나, 아래 내용을 전체 복사해서 메모장 등에 저장해두세요.</p>
+        <button class="btn primary" id="btn-export-file" style="width:100%;margin-bottom:8px;">JSON 파일로 다운로드</button>
         <textarea id="export-area" readonly></textarea>
-        <button class="btn primary" id="btn-export">JSON 생성하기</button>
+        <button class="btn secondary" id="btn-export">텍스트로 보기</button>
       </div>
       <div class="backup-section">
         <h3>가져오기</h3>
@@ -1055,6 +1056,27 @@
   document.getElementById('btn-export').addEventListener('click', ()=>{
     document.getElementById('export-area').value = JSON.stringify(cards, null, 2);
     showToast('아래 내용을 복사해서 보관하세요');
+  });
+
+  document.getElementById('btn-export-file').addEventListener('click', ()=>{
+    if(cards.length === 0){
+      showToast('내보낼 카드가 없어요');
+      return;
+    }
+    const json = JSON.stringify(cards, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const pad = n => String(n).padStart(2, '0');
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `herbcards-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('JSON 파일을 다운로드했어요');
   });
 
   function importCardsFromRaw(raw){
