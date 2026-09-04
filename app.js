@@ -7,57 +7,123 @@
 
   /** @typedef {{id:string,name:string,answerImage:string,createdAt:number,known:boolean,seenCount:number,folder:string}} Card */
 
+  // ---------- Storage ----------
+  // Photos push a deck's data size into the multiple-MB range, which
+  // routinely exceeds localStorage's ~5MB per-origin limit on iOS Safari
+  // (a limit far tighter than desktop/Android Chrome's). IndexedDB has a
+  // much larger quota (typically hundreds of MB or more), so it's used
+  // here instead, with a one-time migration of any data an earlier
+  // version of this app already saved to localStorage.
+  const DB_NAME = "synthCardsDB";
+  const DB_STORE = "kv";
+  let dbPromise = null;
+
+  function openDB() {
+    if (dbPromise) return dbPromise;
+    dbPromise = new Promise((resolve, reject) => {
+      if (!window.indexedDB) {
+        reject(new Error("IndexedDB unavailable"));
+        return;
+      }
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        req.result.createObjectStore(DB_STORE);
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+    return dbPromise;
+  }
+
+  function idbGet(key) {
+    return openDB().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const req = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        })
+    );
+  }
+
+  function idbSet(key, value) {
+    return openDB().then(
+      (db) =>
+        new Promise((resolve, reject) => {
+          const tx = db.transaction(DB_STORE, "readwrite");
+          tx.objectStore(DB_STORE).put(value, key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        })
+    );
+  }
+
+  function migrateLegacyLocalStorage(key) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      localStorage.removeItem(key);
+      return parsed;
+    } catch (e) {
+      console.error("Failed to migrate legacy localStorage for " + key, e);
+      return null;
+    }
+  }
+
   /** @type {Card[]} */
-  let cards = loadCards();
+  let cards = [];
 
   /** @type {string[]} */
-  let folders = loadFolders();
+  let folders = [];
 
-  function loadCards() {
+  async function loadCards() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      parsed.forEach((c) => {
+      let value = await idbGet(STORAGE_KEY);
+      if (value === undefined) {
+        const legacy = migrateLegacyLocalStorage(STORAGE_KEY);
+        value = legacy || [];
+        if (legacy) await idbSet(STORAGE_KEY, value);
+      }
+      if (!Array.isArray(value)) return [];
+      value.forEach((c) => {
         if (typeof c.folder !== "string") c.folder = "";
       });
-      return parsed;
+      return value;
     } catch (e) {
       console.error("Failed to load cards", e);
       return [];
     }
   }
 
-  function saveCards() {
+  async function saveCards() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+      await idbSet(STORAGE_KEY, cards);
     } catch (e) {
-      // An unguarded QuotaExceededError here (common on iOS Safari, which
-      // has a much tighter localStorage limit than desktop/Android Chrome)
-      // would otherwise abort whatever click handler called saveCards()
-      // partway through, silently breaking the rest of that action.
       console.error("Failed to save cards", e);
       showToast("저장 공간이 부족해서 저장하지 못했습니다. 사진이 큰 카드를 정리해 보세요.");
     }
   }
 
-  function loadFolders() {
+  async function loadFolders() {
     try {
-      const raw = localStorage.getItem(FOLDERS_KEY);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed.filter((f) => typeof f === "string");
+      let value = await idbGet(FOLDERS_KEY);
+      if (value === undefined) {
+        const legacy = migrateLegacyLocalStorage(FOLDERS_KEY);
+        value = legacy || [];
+        if (legacy) await idbSet(FOLDERS_KEY, value);
+      }
+      if (!Array.isArray(value)) return [];
+      return value.filter((f) => typeof f === "string");
     } catch (e) {
       console.error("Failed to load folders", e);
       return [];
     }
   }
 
-  function saveFolders() {
+  async function saveFolders() {
     try {
-      localStorage.setItem(FOLDERS_KEY, JSON.stringify(folders));
+      await idbSet(FOLDERS_KEY, folders);
     } catch (e) {
       console.error("Failed to save folders", e);
       showToast("저장 공간이 부족해서 저장하지 못했습니다.");
@@ -959,8 +1025,12 @@
   });
 
   // ---------- Init ----------
-  populateFolderSelects();
-  renderFolderList();
-  renderCardList();
-  refreshStudyView();
+  (async () => {
+    cards = await loadCards();
+    folders = await loadFolders();
+    populateFolderSelects();
+    renderFolderList();
+    renderCardList();
+    refreshStudyView();
+  })();
 })();
