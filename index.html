@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>합성 구조 암기 카드</title>
+<link rel="stylesheet" href="style.css?v=7">
+</head>
+<body>
+<header class="app-header">
+  <h1>합성 구조 암기 카드</h1>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="study">학습</button>
+    <button class="tab-btn" data-tab="manage">카드 관리</button>
+  </nav>
+</header>
+
+<main>
+  <!-- 학습 화면 -->
+  <section id="tab-study" class="tab-panel active">
+    <div class="study-toolbar">
+      <span id="deck-progress">0 / 0</span>
+      <label class="select-label">폴더
+        <select id="study-folder-filter">
+          <option value="__all__">전체</option>
+          <option value="">미분류</option>
+        </select>
+      </label>
+      <label class="checkbox-label">
+        <input type="checkbox" id="filter-unknown"> 모르는 카드만
+      </label>
+      <button id="btn-shuffle">섞기</button>
+      <button id="btn-reset-progress">기록 초기화</button>
+    </div>
+
+    <div id="empty-deck-msg" class="empty-msg" hidden>
+      아직 카드가 없습니다. <strong>카드 관리</strong> 탭에서 먼저 카드를 만들어 주세요.
+    </div>
+    <div id="empty-folder-msg" class="empty-msg" hidden>
+      이 폴더에는 카드가 없습니다.
+    </div>
+
+    <div id="study-card" class="card-area" hidden>
+      <div class="card-name-box">
+        <h2 id="card-name">구조 이름</h2>
+      </div>
+
+      <div class="canvas-pair">
+        <div class="canvas-block">
+          <div class="canvas-block-title">내가 그린 구조</div>
+          <canvas id="draw-canvas" width="500" height="380"></canvas>
+        </div>
+        <div class="canvas-block" id="answer-block" hidden>
+          <div class="canvas-block-title">정답 구조</div>
+          <img id="answer-image" alt="정답 구조 이미지">
+        </div>
+      </div>
+
+      <div class="draw-tools">
+        <label>펜 두께
+          <input type="range" id="pen-width" min="1" max="10" value="3">
+        </label>
+        <button id="btn-eraser" class="toggle-btn">지우개</button>
+        <button id="btn-undo">되돌리기</button>
+        <button id="btn-clear">전체 지우기</button>
+      </div>
+
+      <div class="action-row">
+        <button id="btn-reveal" class="primary-btn">정답 보기</button>
+        <button id="btn-mark-know" class="know-btn" hidden>알았음 ✓</button>
+        <button id="btn-mark-unknown" class="unknown-btn" hidden>몰랐음 ✗</button>
+      </div>
+
+      <div class="nav-row">
+        <button id="btn-prev">◀ 이전</button>
+        <span id="card-position"></span>
+        <button id="btn-next">다음 ▶</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- 카드 관리 화면 -->
+  <section id="tab-manage" class="tab-panel">
+    <div class="manage-layout">
+      <div class="manage-editor">
+        <h2 id="editor-title">새 카드 만들기</h2>
+        <label class="field-label">구조 이름
+          <input type="text" id="card-name-input" placeholder="예: TBSCl, Boc2O, Grignard 시약 ...">
+        </label>
+
+        <label class="field-label">폴더
+          <select id="card-folder-select">
+            <option value="">미분류</option>
+          </select>
+        </label>
+
+        <div class="canvas-block">
+          <div class="canvas-block-title">정답 구조 사진</div>
+          <div id="photo-drop-zone" class="photo-drop-zone">
+            <img id="answer-photo-preview" alt="정답 구조 사진" hidden>
+            <div id="photo-placeholder" class="photo-placeholder">
+              <span class="photo-placeholder-icon">📷</span>
+              <p>클릭하거나 사진을 끌어다 놓으세요</p>
+            </div>
+          </div>
+          <input type="file" id="answer-photo-input" accept="image/*" hidden>
+        </div>
+
+        <div class="action-row">
+          <button id="btn-choose-photo">사진 선택</button>
+          <button id="btn-remove-photo" hidden>사진 제거</button>
+        </div>
+
+        <div class="action-row">
+          <button id="btn-save-card" class="primary-btn">카드 저장</button>
+          <button id="btn-cancel-edit" hidden>취소</button>
+        </div>
+      </div>
+
+      <div class="manage-list">
+        <div class="manage-list-header">
+          <h2>폴더</h2>
+        </div>
+        <div class="folder-add-row">
+          <input type="text" id="new-folder-input" placeholder="새 폴더 이름">
+          <button id="btn-add-folder">추가</button>
+        </div>
+        <ul id="folder-list" class="folder-list"></ul>
+
+        <div class="manage-list-header manage-list-header-cards">
+          <h2>카드 목록 (<span id="card-count">0</span>)</h2>
+          <div class="io-buttons">
+            <button id="btn-export">내보내기</button>
+            <button id="btn-import">가져오기</button>
+            <input type="file" id="import-file" accept="application/json" hidden>
+          </div>
+        </div>
+        <ul id="card-list"></ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="import-choice-overlay" class="overlay" hidden>
+  <div class="overlay-box">
+    <p id="import-choice-text"></p>
+    <div class="action-row">
+      <button id="btn-import-merge" class="primary-btn">추가하기</button>
+      <button id="btn-import-replace">모두 교체</button>
+      <button id="btn-import-cancel">취소</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="app.js?v=7"></script>
+</body>
+</html>
