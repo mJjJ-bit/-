@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>생약학 암기장</title>
+<style>
+  :root{
+    --ink:#2A2420;
+    --paper:#F5F0E6;
+    --paper-dim:#EAE2D2;
+    --forest:#1B2E22;
+    --forest-2:#25402F;
+    --sage:#6B8F71;
+    --sage-dim:#DCE5D9;
+    --gold:#B8863B;
+    --gold-dim:#EADFC4;
+    --rust:#9C4A34;
+    --rust-dim:#F0DAD2;
+    --line:#D8CDB6;
+    --shadow: 0 2px 10px rgba(27,46,34,0.15);
+    font-size:16px;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--forest);
+    color:var(--ink);
+    font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",-apple-system,sans-serif;
+    min-height:100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .app{
+    max-width:480px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+  header{
+    background:var(--forest);
+    color:var(--paper);
+    padding:18px 20px 16px;
+    position:relative;
+    overflow:hidden;
+  }
+  header .leaf{
+    position:absolute;
+    right:-14px; top:-10px;
+    width:90px; height:90px;
+    opacity:0.18;
+  }
+  header h1{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    font-weight:700;
+    font-size:1.5rem;
+    margin:0 0 2px;
+    letter-spacing:0.02em;
+  }
+  header p{
+    margin:0;
+    font-size:0.82rem;
+    color:var(--sage-dim);
+    opacity:0.85;
+  }
+
+  nav.tabs{
+    display:flex;
+    background:var(--forest-2);
+  }
+  nav.tabs button{
+    flex:1;
+    background:none;
+    border:none;
+    color:var(--sage-dim);
+    padding:12px 4px;
+    font-size:0.88rem;
+    font-family:inherit;
+    cursor:pointer;
+    border-bottom:3px solid transparent;
+    transition:color .15s, border-color .15s;
+  }
+  nav.tabs button.active{
+    color:var(--paper);
+    border-bottom-color:var(--gold);
+    font-weight:600;
+  }
+
+  main{
+    flex:1;
+    padding:18px 16px 100px;
+    overflow-y:auto;
+  }
+
+  .view{display:none;}
+  .view.active{display:block;}
+
+  /* ---------- Study view ---------- */
+  .study-stats{
+    display:flex;
+    justify-content:space-between;
+    font-size:0.8rem;
+    color:#6b5f4f;
+    margin-bottom:10px;
+    padding:0 2px;
+  }
+  .study-stats b{color:var(--forest);}
+
+  .card-stage{
+    perspective:1200px;
+    margin-bottom:16px;
+    min-height:290px;
+  }
+  .flashcard{
+    position:relative;
+    width:100%;
+    min-height:290px;
+    border-radius:6px;
+    cursor:pointer;
+    transition:transform .5s;
+    transform-style:preserve-3d;
+  }
+  .flashcard.flipped{transform:rotateY(180deg);}
+  .face{
+    position:absolute;
+    inset:0;
+    backface-visibility:hidden;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    box-shadow:var(--shadow);
+    padding:22px 20px;
+    display:flex;
+    flex-direction:column;
+  }
+  .face.back{transform:rotateY(180deg);}
+  .face .corner{
+    position:absolute; top:0; right:0;
+    width:0; height:0;
+    border-style:solid;
+    border-width:0 22px 22px 0;
+    border-color:transparent var(--paper-dim) transparent transparent;
+  }
+  .tag-row{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+  .tag{
+    font-size:0.68rem;
+    padding:3px 9px;
+    border-radius:20px;
+    background:var(--sage-dim);
+    color:var(--forest-2);
+    white-space:nowrap;
+  }
+  .tag.gold{background:var(--gold-dim); color:#7A5A1E;}
+  .front-name{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    font-size:2rem;
+    font-weight:700;
+    color:var(--forest);
+    margin:auto 0;
+  }
+  .front-hint{
+    font-size:0.78rem;
+    color:#9a8f78;
+    margin-top:8px;
+  }
+  .back-field{margin-bottom:12px;}
+  .back-field .label{
+    font-size:0.68rem;
+    color:#9a8f78;
+    margin-bottom:2px;
+  }
+  .back-field .value{
+    font-size:0.94rem;
+    line-height:1.45;
+  }
+  .back-field .value i{color:var(--forest-2);}
+  .mnemonic-box{
+    margin-top:auto;
+    background:var(--gold-dim);
+    border-radius:6px;
+    padding:10px 12px;
+    font-size:0.86rem;
+    color:#6b4f1e;
+    line-height:1.4;
+  }
+  .mnemonic-box .label{font-size:0.68rem; color:#8a6a2e; margin-bottom:3px;}
+
+  .rate-row{
+    display:flex;
+    gap:8px;
+  }
+  .rate-btn{
+    flex:1;
+    padding:13px 4px;
+    border-radius:6px;
+    border:none;
+    font-size:0.88rem;
+    font-weight:600;
+    font-family:inherit;
+    cursor:pointer;
+    color:#fff;
+  }
+  .rate-btn.hard{background:var(--rust);}
+  .rate-btn.mid{background:var(--gold);}
+  .rate-btn.easy{background:var(--sage);}
+  .rate-row.hidden{display:none;}
+  .flip-hint{
+    text-align:center;
+    font-size:0.8rem;
+    color:#9a8f78;
+    margin-bottom:10px;
+  }
+
+  .empty-state{
+    text-align:center;
+    padding:60px 20px;
+    color:#8a7d66;
+  }
+  .empty-state svg{width:56px;height:56px;opacity:0.5;margin-bottom:14px;}
+  .empty-state h3{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    color:var(--forest);
+    margin:0 0 6px;
+  }
+  .empty-state p{font-size:0.85rem; margin:0 0 16px;}
+
+  /* ---------- filters ---------- */
+  .filter-bar{
+    display:flex;
+    gap:8px;
+    margin-bottom:14px;
+    overflow-x:auto;
+    padding-bottom:2px;
+  }
+  .filter-bar select{
+    flex:1;
+    min-width:0;
+    padding:9px 8px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:0.82rem;
+    font-family:inherit;
+    color:var(--ink);
+  }
+
+  /* ---------- Card list view ---------- */
+  .search-box{
+    width:100%;
+    padding:10px 12px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:0.9rem;
+    margin-bottom:12px;
+    font-family:inherit;
+  }
+  .list-item{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:12px 14px;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:10px;
+    cursor:pointer;
+  }
+  .list-item .li-main{min-width:0;}
+  .list-item .li-name{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    font-weight:700;
+    font-size:1.05rem;
+    color:var(--forest);
+  }
+  .list-item .li-sub{
+    font-size:0.76rem;
+    color:#9a8f78;
+    margin-top:2px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .li-box{
+    font-size:0.68rem;
+    color:#fff;
+    background:var(--sage);
+    border-radius:20px;
+    padding:3px 9px;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+
+  .fab{
+    position:absolute;
+    right:18px; bottom:24px;
+    width:54px; height:54px;
+    border-radius:50%;
+    background:var(--forest);
+    color:var(--paper);
+    border:none;
+    font-size:1.6rem;
+    box-shadow:0 4px 14px rgba(27,46,34,0.35);
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:20;
+  }
+
+  /* ---------- modal ---------- */
+  .modal-overlay{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(27,46,34,0.55);
+    z-index:50;
+    align-items:flex-end;
+    justify-content:center;
+  }
+  .modal-overlay.open{display:flex;}
+  .modal{
+    background:var(--paper);
+    width:100%;
+    max-width:480px;
+    max-height:88vh;
+    overflow-y:auto;
+    border-radius:16px 16px 0 0;
+    padding:20px 20px 28px;
+  }
+  .modal h2{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    color:var(--forest);
+    margin:0 0 16px;
+    font-size:1.2rem;
+  }
+  .field{margin-bottom:12px;}
+  .field label{
+    display:block;
+    font-size:0.78rem;
+    color:#6b5f4f;
+    margin-bottom:4px;
+  }
+  .field input, .field textarea{
+    width:100%;
+    padding:9px 11px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    font-family:inherit;
+    font-size:0.9rem;
+    background:#fff;
+    resize:vertical;
+  }
+  .field textarea{min-height:52px;}
+  .field.mnemonic-field textarea{min-height:70px;}
+  .field.mnemonic-field label{color:#8a6a2e;}
+  .modal-actions{
+    display:flex;
+    gap:10px;
+    margin-top:18px;
+  }
+  .btn{
+    flex:1;
+    padding:12px;
+    border-radius:6px;
+    border:none;
+    font-family:inherit;
+    font-size:0.9rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .btn.primary{background:var(--forest); color:var(--paper);}
+  .btn.ghost{background:transparent; color:var(--rust); border:1px solid var(--rust-dim);}
+  .btn.secondary{background:var(--sage-dim); color:var(--forest-2);}
+
+  /* ---------- backup view ---------- */
+  .backup-section{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:16px;
+    margin-bottom:16px;
+  }
+  .backup-section h3{
+    font-family:"Nanum Myeongjo","Noto Serif KR",serif;
+    margin:0 0 8px;
+    color:var(--forest);
+    font-size:1rem;
+  }
+  .backup-section p{
+    font-size:0.82rem;
+    color:#6b5f4f;
+    margin:0 0 10px;
+    line-height:1.5;
+  }
+  .backup-section textarea{
+    width:100%;
+    min-height:110px;
+    font-size:0.78rem;
+    font-family:monospace;
+    padding:8px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    margin-bottom:8px;
+  }
+  .privacy-note{
+    background:var(--sage-dim);
+    border-radius:8px;
+    padding:14px 16px;
+    font-size:0.8rem;
+    color:var(--forest-2);
+    line-height:1.5;
+    margin-bottom:16px;
+  }
+  .toast{
+    position:fixed;
+    bottom:100px; left:50%;
+    transform:translateX(-50%);
+    background:var(--forest);
+    color:var(--paper);
+    padding:10px 18px;
+    border-radius:20px;
+    font-size:0.82rem;
+    z-index:100;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .25s;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header>
+    <svg class="leaf" viewBox="0 0 100 100"><path d="M50 5 C20 20 15 60 50 95 C85 60 80 20 50 5 Z" fill="#F5F0E6"/><path d="M50 10 L50 90" stroke="#1B2E22" stroke-width="2"/></svg>
+    <h1>생약학 암기장</h1>
+    <p>내 손으로 채우는 본초 카드함</p>
+  </header>
+
+  <nav class="tabs">
+    <button class="active" data-tab="study">학습</button>
+    <button data-tab="list">카드함</button>
+    <button data-tab="backup">백업</button>
+  </nav>
+
+  <main>
+
+    <!-- STUDY VIEW -->
+    <section class="view active" id="view-study">
+      <div class="filter-bar">
+        <select id="filter-family"><option value="">전체 과</option></select>
+        <select id="filter-category"><option value="">전체 효능분류</option></select>
+      </div>
+      <div class="study-stats">
+        <span>오늘 복습 <b id="stat-due">0</b>장</span>
+        <span>전체 <b id="stat-total">0</b>장</span>
+      </div>
+
+      <div id="study-empty" class="empty-state" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1.5"><path d="M12 2 C7 6 6 14 12 21 C18 14 17 6 12 2 Z"/><path d="M12 4 L12 19"/></svg>
+        <h3>카드가 없어요</h3>
+        <p>카드함 탭에서 + 버튼으로<br>첫 카드를 만들어보세요.</p>
+      </div>
+
+      <div id="study-done" class="empty-state" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#B8863B" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M8 12 L11 15 L16 9"/></svg>
+        <h3>오늘 복습 끝!</h3>
+        <p>선택한 필터 기준으로<br>더 이상 복습할 카드가 없어요.</p>
+        <button class="btn secondary" id="btn-study-all" style="max-width:200px;margin:0 auto;">필터 무시하고 전체 학습</button>
+      </div>
+
+      <div id="study-active">
+        <div class="card-stage">
+          <div class="flashcard" id="flashcard">
+            <div class="face front">
+              <div class="corner"></div>
+              <div class="tag-row" id="front-tags"></div>
+              <div class="front-name" id="front-name">-</div>
+              <div class="front-hint">탭해서 뒤집기 →</div>
+            </div>
+            <div class="face back" id="back-face"></div>
+          </div>
+        </div>
+        <div class="flip-hint" id="flip-hint">카드를 탭하면 정답이 보여요</div>
+        <div class="rate-row hidden" id="rate-row">
+          <button class="rate-btn hard" data-rate="0">모름</button>
+          <button class="rate-btn mid" data-rate="1">애매</button>
+          <button class="rate-btn easy" data-rate="2">안다</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- LIST VIEW -->
+    <section class="view" id="view-list">
+      <input type="text" class="search-box" id="search-input" placeholder="생약명, 학명, 과, 성분으로 검색">
+      <div id="list-empty" class="empty-state" style="display:none;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#6B8F71" stroke-width="1.5"><circle cx="11" cy="11" r="7"/><path d="M21 21 L16.5 16.5"/></svg>
+        <h3>결과 없음</h3>
+        <p>검색어를 바꾸거나<br>새 카드를 추가해보세요.</p>
+      </div>
+      <div id="list-container"></div>
+    </section>
+
+    <!-- BACKUP VIEW -->
+    <section class="view" id="view-backup">
+      <div class="privacy-note">
+        🔒 이 앱의 카드 데이터는 이 브라우저에만 저장되며(localStorage), 다른 사용자나 외부로 전송되지 않아요. 기기를 바꾸거나 브라우저 데이터를 지우면 사라질 수 있으니, 주기적으로 아래에서 JSON 백업본을 복사해두는 걸 추천해요.
+      </div>
+      <div class="backup-section">
+        <h3>내보내기</h3>
+        <p>아래 내용을 전체 복사해서 메모장 등에 저장해두세요.</p>
+        <textarea id="export-area" readonly></textarea>
+        <button class="btn primary" id="btn-export">JSON 생성하기</button>
+      </div>
+      <div class="backup-section">
+        <h3>가져오기</h3>
+        <p>백업해둔 JSON을 붙여넣고 불러오세요. 기존 카드와 합쳐집니다(같은 ID는 덮어씀).</p>
+        <textarea id="import-area" placeholder="여기에 JSON 붙여넣기"></textarea>
+        <button class="btn primary" id="btn-import">불러오기</button>
+      </div>
+      <div class="backup-section">
+        <h3>전체 삭제</h3>
+        <p>모든 카드를 삭제합니다. 백업 없이는 되돌릴 수 없어요.</p>
+        <button class="btn ghost" id="btn-clear-all">전체 카드 삭제</button>
+      </div>
+    </section>
+
+  </main>
+
+  <button class="fab" id="fab-add">+</button>
+</div>
+
+<!-- ADD/EDIT MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">새 카드 추가</h2>
+    <div class="field">
+      <label>생약명 *</label>
+      <input type="text" id="f-name" placeholder="예: 갈근">
+    </div>
+    <div class="field">
+      <label>기원식물명</label>
+      <input type="text" id="f-plant" placeholder="예: 칡">
+    </div>
+    <div class="field">
+      <label>학명</label>
+      <input type="text" id="f-latin" placeholder="예: Pueraria lobata">
+    </div>
+    <div class="field">
+      <label>과 (Family)</label>
+      <input type="text" id="f-family" placeholder="예: 콩과(Leguminosae)">
+    </div>
+    <div class="field">
+      <label>본초명 / 효능분류</label>
+      <input type="text" id="f-category" placeholder="예: 신량해표약">
+    </div>
+    <div class="field">
+      <label>주요 성분</label>
+      <textarea id="f-compounds" placeholder="예: puerarin, daidzein, genistin, formononetin"></textarea>
+    </div>
+    <div class="field">
+      <label>약리작용 / 응용</label>
+      <textarea id="f-pharm" placeholder="예: 해열·진경작용(daidzein), 발한, 순환계·혈당강하(puerarin)"></textarea>
+    </div>
+    <div class="field mnemonic-field">
+      <label>나만의 암기 말소스</label>
+      <textarea id="f-mnemonic" placeholder="예: 갈수록 칡칡하고 뿌얘지는 로버트의 얼굴..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" id="btn-delete" style="display:none;">삭제</button>
+      <button class="btn secondary" id="btn-cancel">취소</button>
+      <button class="btn primary" id="btn-save">저장</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const STORAGE_KEY = "herbcards:data";
+  const BOX_INTERVALS = [0, 1, 3, 7, 16, 35]; // days, index = box level 0..5
+
+  let cards = [];
+  let editingId = null;
+  let currentStudyCard = null;
+  let studyQueue = [];
+  let ignoreFilters = false;
+
+  // ---------- storage ----------
+  function loadCards(){
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY);
+      cards = raw ? JSON.parse(raw) : null;
+    }catch(e){
+      cards = null;
+    }
+    if(!cards){
+      cards = seedData();
+      saveCards();
+    }
+  }
+
+  function saveCards(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cards));
+    }catch(e){
+      showToast("저장 실패 - 다시 시도해주세요");
+    }
+  }
+
+  function seedData(){
+    const now = new Date().toISOString();
+    return [
+      {
+        id: cryptoId(),
+        name: "갈근",
+        plant: "칡",
+        latin: "Pueraria lobata",
+        family: "콩과 (Leguminosae)",
+        category: "신량해표약",
+        compounds: "puerarin, daidzein, genistin, formononetin (isoflavonoid)",
+        pharm: "해열·진경작용(daidzein), 발한, 순환계·혈당강하(puerarin)",
+        mnemonic: "갈수록 칡칡하고 뿌얘지는 얼굴 → 갈근/칡/Pueraria lobata\n볼모로 잡힌 제인이가 죽었대 에구머니나 → formononetin/daidzein/Leguminosae\n진자 열나고 발끈해서 당장 결근했대 → 진경·해열·발한·혈당강하",
+        box: 0,
+        due: now,
+        createdAt: now
+      }
+    ];
+  }
+
+  function cryptoId(){
+    return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  }
+
+  // ---------- tabs ----------
+  const tabButtons = document.querySelectorAll('nav.tabs button');
+  tabButtons.forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      tabButtons.forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+      document.getElementById('view-'+btn.dataset.tab).classList.add('active');
+      if(btn.dataset.tab === 'study') refreshStudy();
+      if(btn.dataset.tab === 'list') refreshList();
+    });
+  });
+
+  // ---------- filters ----------
+  const filterFamily = document.getElementById('filter-family');
+  const filterCategory = document.getElementById('filter-category');
+
+  function populateFilters(){
+    const families = [...new Set(cards.map(c=>c.family).filter(Boolean))].sort();
+    const cats = [...new Set(cards.map(c=>c.category).filter(Boolean))].sort();
+    const curF = filterFamily.value, curC = filterCategory.value;
+    filterFamily.innerHTML = '<option value="">전체 과</option>' + families.map(f=>`<option value="${escapeHtml(f)}">${escapeHtml(f)}</option>`).join('');
+    filterCategory.innerHTML = '<option value="">전체 효능분류</option>' + cats.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+    filterFamily.value = curF;
+    filterCategory.value = curC;
+  }
+
+  filterFamily.addEventListener('change', ()=>{ ignoreFilters=false; refreshStudy(); });
+  filterCategory.addEventListener('change', ()=>{ ignoreFilters=false; refreshStudy(); });
+
+  // ---------- study logic ----------
+  function getFilteredCards(){
+    const f = filterFamily.value, c = filterCategory.value;
+    return cards.filter(card=>{
+      if(f && card.family !== f) return false;
+      if(c && card.category !== c) return false;
+      return true;
+    });
+  }
+
+  function buildQueue(){
+    const pool = ignoreFilters ? cards : getFilteredCards();
+    const now = Date.now();
+    let due = pool.filter(c=> new Date(c.due).getTime() <= now);
+    if(due.length === 0 && ignoreFilters){
+      due = pool.slice(); // study everything regardless of due date
+    }
+    due.sort((a,b)=> a.box - b.box);
+    return due;
+  }
+
+  function refreshStudy(){
+    populateFilters();
+    document.getElementById('stat-total').textContent = cards.length;
+    const dueCount = getFilteredCards().filter(c=> new Date(c.due).getTime() <= Date.now()).length;
+    document.getElementById('stat-due').textContent = dueCount;
+
+    document.getElementById('study-empty').style.display = 'none';
+    document.getElementById('study-done').style.display = 'none';
+    document.getElementById('study-active').style.display = 'none';
+
+    if(cards.length === 0){
+      document.getElementById('study-empty').style.display = 'block';
+      return;
+    }
+
+    studyQueue = buildQueue();
+    if(studyQueue.length === 0){
+      document.getElementById('study-done').style.display = 'block';
+      return;
+    }
+    document.getElementById('study-active').style.display = 'block';
+    nextCard();
+  }
+
+  document.getElementById('btn-study-all').addEventListener('click', ()=>{
+    ignoreFilters = true;
+    refreshStudy();
+  });
+
+  function nextCard(){
+    if(studyQueue.length === 0){
+      refreshStudy();
+      return;
+    }
+    currentStudyCard = studyQueue[0];
+    renderCardFront(currentStudyCard);
+    document.getElementById('flashcard').classList.remove('flipped');
+    document.getElementById('rate-row').classList.add('hidden');
+    document.getElementById('flip-hint').style.display = 'block';
+  }
+
+  function renderCardFront(card){
+    document.getElementById('front-name').textContent = card.name || '(이름없음)';
+    const tags = document.getElementById('front-tags');
+    tags.innerHTML = '';
+    if(card.family) tags.innerHTML += `<span class="tag">${escapeHtml(card.family)}</span>`;
+    if(card.category) tags.innerHTML += `<span class="tag gold">${escapeHtml(card.category)}</span>`;
+
+    const back = document.getElementById('back-face');
+    back.innerHTML = `
+      <div class="corner"></div>
+      ${card.plant ? `<div class="back-field"><div class="label">기원식물</div><div class="value"><i>${escapeHtml(card.plant)}</i></div></div>`:''}
+      ${card.latin ? `<div class="back-field"><div class="label">학명</div><div class="value"><i>${escapeHtml(card.latin)}</i></div></div>`:''}
+      ${card.compounds ? `<div class="back-field"><div class="label">주요 성분</div><div class="value">${escapeHtml(card.compounds)}</div></div>`:''}
+      ${card.pharm ? `<div class="back-field"><div class="label">약리·응용</div><div class="value">${escapeHtml(card.pharm)}</div></div>`:''}
+      ${card.mnemonic ? `<div class="mnemonic-box"><div class="label">내 말소스</div>${escapeHtml(card.mnemonic).replace(/\n/g,'<br>')}</div>`:''}
+    `;
+  }
+
+  document.getElementById('flashcard').addEventListener('click', function(){
+    if(!currentStudyCard) return;
+    this.classList.toggle('flipped');
+    const flipped = this.classList.contains('flipped');
+    document.getElementById('rate-row').classList.toggle('hidden', !flipped);
+    document.getElementById('flip-hint').style.display = flipped ? 'none' : 'block';
+  });
+
+  document.querySelectorAll('.rate-btn').forEach(btn=>{
+    btn.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const rate = parseInt(btn.dataset.rate,10); // 0 hard, 1 mid, 2 easy
+      const card = currentStudyCard;
+      if(!card) return;
+      if(rate === 0) card.box = 0;
+      else if(rate === 1) card.box = Math.max(0, card.box); // stay
+      else card.box = Math.min(BOX_INTERVALS.length-1, card.box+1);
+      const days = BOX_INTERVALS[card.box];
+      const due = new Date();
+      due.setDate(due.getDate() + days);
+      card.due = due.toISOString();
+      saveCards();
+      studyQueue.shift();
+      nextCard();
+    });
+  });
+
+  // ---------- list view ----------
+  const searchInput = document.getElementById('search-input');
+  searchInput.addEventListener('input', refreshList);
+
+  function refreshList(){
+    const q = searchInput.value.trim().toLowerCase();
+    const container = document.getElementById('list-container');
+    let filtered = cards;
+    if(q){
+      filtered = cards.filter(c=>{
+        return [c.name,c.plant,c.latin,c.family,c.category,c.compounds].join(' ').toLowerCase().includes(q);
+      });
+    }
+    filtered = filtered.slice().sort((a,b)=> (a.name||'').localeCompare(b.name||'','ko'));
+    document.getElementById('list-empty').style.display = filtered.length===0 ? 'block' : 'none';
+    container.innerHTML = filtered.map(c=>{
+      const boxLabel = ['새카드','1단계','2단계','3단계','4단계','완료'][c.box] || '';
+      const sub = [c.latin, c.category].filter(Boolean).join(' · ');
+      return `<div class="list-item" data-id="${c.id}">
+        <div class="li-main">
+          <div class="li-name">${escapeHtml(c.name||'(이름없음)')}</div>
+          <div class="li-sub">${escapeHtml(sub)}</div>
+        </div>
+        <div class="li-box">${boxLabel}</div>
+      </div>`;
+    }).join('');
+    container.querySelectorAll('.list-item').forEach(el=>{
+      el.addEventListener('click', ()=> openEditModal(el.dataset.id));
+    });
+  }
+
+  // ---------- modal ----------
+  const overlay = document.getElementById('modal-overlay');
+  const fields = ['name','plant','latin','family','category','compounds','pharm','mnemonic'];
+
+  function openAddModal(){
+    editingId = null;
+    document.getElementById('modal-title').textContent = '새 카드 추가';
+    fields.forEach(f=> document.getElementById('f-'+f).value = '');
+    document.getElementById('btn-delete').style.display = 'none';
+    overlay.classList.add('open');
+  }
+
+  function openEditModal(id){
+    const card = cards.find(c=>c.id===id);
+    if(!card) return;
+    editingId = id;
+    document.getElementById('modal-title').textContent = '카드 편집';
+    fields.forEach(f=> document.getElementById('f-'+f).value = card[f] || '');
+    document.getElementById('btn-delete').style.display = 'block';
+    overlay.classList.add('open');
+  }
+
+  function closeModal(){
+    overlay.classList.remove('open');
+    editingId = null;
+  }
+
+  document.getElementById('fab-add').addEventListener('click', openAddModal);
+  document.getElementById('btn-cancel').addEventListener('click', closeModal);
+  overlay.addEventListener('click', (e)=>{ if(e.target === overlay) closeModal(); });
+
+  document.getElementById('btn-save').addEventListener('click', ()=>{
+    const name = document.getElementById('f-name').value.trim();
+    if(!name){
+      showToast('생약명을 입력해주세요');
+      return;
+    }
+    if(editingId){
+      const card = cards.find(c=>c.id===editingId);
+      fields.forEach(f=> card[f] = document.getElementById('f-'+f).value.trim());
+    } else {
+      const now = new Date().toISOString();
+      const newCard = { id: cryptoId(), box:0, due: now, createdAt: now };
+      fields.forEach(f=> newCard[f] = document.getElementById('f-'+f).value.trim());
+      cards.push(newCard);
+    }
+    saveCards();
+    closeModal();
+    refreshList();
+    refreshStudy();
+    showToast(editingId ? '카드를 수정했어요' : '카드를 추가했어요');
+  });
+
+  document.getElementById('btn-delete').addEventListener('click', ()=>{
+    if(!editingId) return;
+    if(!confirm('이 카드를 삭제할까요?')) return;
+    cards = cards.filter(c=>c.id!==editingId);
+    saveCards();
+    closeModal();
+    refreshList();
+    refreshStudy();
+    showToast('카드를 삭제했어요');
+  });
+
+  // ---------- backup ----------
+  document.getElementById('btn-export').addEventListener('click', ()=>{
+    document.getElementById('export-area').value = JSON.stringify(cards, null, 2);
+    showToast('아래 내용을 복사해서 보관하세요');
+  });
+
+  document.getElementById('btn-import').addEventListener('click', ()=>{
+    const raw = document.getElementById('import-area').value.trim();
+    if(!raw) return;
+    try{
+      const incoming = JSON.parse(raw);
+      if(!Array.isArray(incoming)) throw new Error('배열이 아님');
+      const byId = new Map(cards.map(c=>[c.id,c]));
+      incoming.forEach(c=>{
+        if(!c.id) c.id = cryptoId();
+        byId.set(c.id, Object.assign({box:0, due:new Date().toISOString(), createdAt:new Date().toISOString()}, c));
+      });
+      cards = Array.from(byId.values());
+      saveCards();
+      refreshList();
+      refreshStudy();
+      showToast(`${incoming.length}개 카드를 불러왔어요`);
+      document.getElementById('import-area').value = '';
+    }catch(e){
+      showToast('JSON 형식을 확인해주세요');
+    }
+  });
+
+  document.getElementById('btn-clear-all').addEventListener('click', ()=>{
+    if(!confirm('정말 모든 카드를 삭제할까요? 되돌릴 수 없어요.')) return;
+    cards = [];
+    saveCards();
+    refreshList();
+    refreshStudy();
+    showToast('모든 카드를 삭제했어요');
+  });
+
+  // ---------- utils ----------
+  function escapeHtml(str){
+    if(str===undefined || str===null) return '';
+    return String(str)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+      .replace(/"/g,'&quot;');
+  }
+
+  let toastTimer;
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> t.classList.remove('show'), 2200);
+  }
+
+  // ---------- init ----------
+  (function init(){
+    loadCards();
+    populateFilters();
+    refreshStudy();
+    refreshList();
+  })();
+
+})();
+</script>
+</body>
+</html>
