@@ -402,6 +402,24 @@
     border-radius:6px;
     margin-bottom:12px;
     background:var(--paper-dim);
+    cursor:zoom-in;
+  }
+  .image-lightbox{
+    display:none;
+    position:fixed; inset:0;
+    background:rgba(20,18,14,0.9);
+    z-index:80;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+    cursor:zoom-out;
+  }
+  .image-lightbox.open{display:flex;}
+  .image-lightbox img{
+    max-width:100%;
+    max-height:100%;
+    object-fit:contain;
+    border-radius:6px;
   }
   .modal-actions{
     display:flex;
@@ -641,6 +659,10 @@
 
 <div class="toast" id="toast"></div>
 
+<div class="image-lightbox" id="image-lightbox">
+  <img id="image-lightbox-img" alt="확대된 카드 사진">
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -678,23 +700,7 @@
   }
 
   function seedData(){
-    const now = new Date().toISOString();
-    return [
-      {
-        id: cryptoId(),
-        name: "갈근",
-        plant: "칡",
-        latin: "Pueraria lobata",
-        family: "콩과 (Leguminosae)",
-        category: "신량해표약",
-        compounds: "puerarin, daidzein, genistin, formononetin (isoflavonoid)",
-        pharm: "해열·진경작용(daidzein), 발한, 순환계·혈당강하(puerarin)",
-        mnemonic: "갈수록 칡칡하고 뿌얘지는 얼굴 → 갈근/칡/Pueraria lobata\n볼모로 잡힌 제인이가 죽었대 에구머니나 → formononetin/daidzein/Leguminosae\n진자 열나고 발끈해서 당장 결근했대 → 진경·해열·발한·혈당강하",
-        box: 0,
-        due: now,
-        createdAt: now
-      }
-    ];
+    return [];
   }
 
   function cryptoId(){
@@ -818,6 +824,22 @@
     const flipped = this.classList.contains('flipped');
     document.getElementById('rate-row').classList.toggle('hidden', !flipped);
     document.getElementById('flip-hint').style.display = flipped ? 'none' : 'block';
+  });
+
+  // ---------- image lightbox ----------
+  const imageLightbox = document.getElementById('image-lightbox');
+  const imageLightboxImg = document.getElementById('image-lightbox-img');
+
+  document.getElementById('back-face').addEventListener('click', (e)=>{
+    if(e.target.classList.contains('card-image')){
+      e.stopPropagation();
+      imageLightboxImg.src = e.target.src;
+      imageLightbox.classList.add('open');
+    }
+  });
+  imageLightbox.addEventListener('click', ()=>{
+    imageLightbox.classList.remove('open');
+    imageLightboxImg.src = '';
   });
 
   document.querySelectorAll('.rate-btn').forEach(btn=>{
