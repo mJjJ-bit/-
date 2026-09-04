@@ -582,7 +582,9 @@
       </div>
       <div class="backup-section">
         <h3>가져오기</h3>
-        <p>백업해둔 JSON을 붙여넣고 불러오세요. 기존 카드와 합쳐집니다(같은 ID는 덮어씀).</p>
+        <p>JSON 파일을 선택하거나, 백업해둔 JSON을 붙여넣고 불러오세요. 기존 카드와 합쳐집니다(같은 ID는 덮어씀).</p>
+        <input type="file" id="import-file-input" accept=".json,application/json" hidden>
+        <button class="btn secondary" id="btn-import-file" style="width:100%;margin-bottom:8px;">JSON 파일 선택</button>
         <textarea id="import-area" placeholder="여기에 JSON 붙여넣기"></textarea>
         <button class="btn primary" id="btn-import">불러오기</button>
       </div>
@@ -1055,9 +1057,12 @@
     showToast('아래 내용을 복사해서 보관하세요');
   });
 
-  document.getElementById('btn-import').addEventListener('click', ()=>{
-    const raw = document.getElementById('import-area').value.trim();
-    if(!raw) return;
+  function importCardsFromRaw(raw){
+    raw = (raw || '').trim();
+    if(!raw){
+      showToast('불러올 JSON 내용이 없어요');
+      return;
+    }
     try{
       const incoming = JSON.parse(raw);
       if(!Array.isArray(incoming)) throw new Error('배열이 아님');
@@ -1073,8 +1078,28 @@
       showToast(`${incoming.length}개 카드를 불러왔어요`);
       document.getElementById('import-area').value = '';
     }catch(e){
-      showToast('JSON 형식을 확인해주세요');
+      showToast('JSON 형식을 확인해주세요 (' + e.message + ')');
     }
+  }
+
+  document.getElementById('btn-import').addEventListener('click', ()=>{
+    importCardsFromRaw(document.getElementById('import-area').value);
+  });
+
+  const importFileInput = document.getElementById('import-file-input');
+  document.getElementById('btn-import-file').addEventListener('click', ()=> importFileInput.click());
+  importFileInput.addEventListener('change', ()=>{
+    const file = importFileInput.files[0];
+    importFileInput.value = '';
+    if(!file) return;
+    if(!/\.json$/i.test(file.name) && file.type && file.type !== 'application/json'){
+      showToast('.json 파일을 선택해주세요');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => showToast('파일을 읽지 못했어요');
+    reader.onload = () => importCardsFromRaw(String(reader.result));
+    reader.readAsText(file, 'utf-8');
   });
 
   document.getElementById('btn-clear-all').addEventListener('click', ()=>{
