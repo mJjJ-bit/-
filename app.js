@@ -935,6 +935,33 @@
       li.appendChild(actions);
       cardListEl.appendChild(li);
     });
+
+    updateStorageInfo();
+  }
+
+  // Shows real numbers instead of guessing when a user reports "storage
+  // full": how much of the deck's own data is photos, and (where the
+  // browser exposes it) how much of the actual browser storage quota is
+  // already used, since that can be capped by real device free space too.
+  function updateStorageInfo() {
+    const el = document.getElementById("storage-info");
+    if (!el) return;
+    const totalChars = cards.reduce((sum, c) => sum + (c.answerImage ? c.answerImage.length : 0), 0);
+    const approxMB = (totalChars / 1024 / 1024).toFixed(1);
+    const baseText = `카드 ${cards.length}개 · 사진 데이터 약 ${approxMB}MB`;
+    el.textContent = baseText;
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage
+        .estimate()
+        .then((est) => {
+          if (typeof est.usage === "number" && typeof est.quota === "number") {
+            const usageMB = (est.usage / 1024 / 1024).toFixed(1);
+            const quotaMB = (est.quota / 1024 / 1024).toFixed(0);
+            el.textContent = `${baseText} · 브라우저 저장 공간 ${usageMB}MB / ${quotaMB}MB 사용 중`;
+          }
+        })
+        .catch(() => {});
+    }
   }
 
   // Re-encodes every card's stored photo at the current (smaller) size/

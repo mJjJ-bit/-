@@ -337,6 +337,12 @@ canvas {
 
 .manage-list-header-cards { margin-top: 20px; }
 
+.storage-info {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: -4px 0 10px;
+}
+
 .folder-list {
   list-style: none;
   margin: 0 0 4px;
