@@ -29,14 +29,46 @@
       req.onupgradeneeded = () => {
         req.result.createObjectStore(DB_STORE);
       };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error);
+      req.onsuccess = () => {
+        const db = req.result;
+        // Safari is known to silently close IndexedDB connections (e.g.
+        // after the tab has been backgrounded for a while); without this,
+        // every later transaction on the stale connection throws
+        // InvalidStateError and gets misreported as "storage full".
+        // Dropping the cached promise here means the next call just opens
+        // a fresh connection instead of reusing the dead one.
+        db.onclose = () => {
+          if (dbPromise === req.result) dbPromise = null;
+        };
+        resolve(db);
+      };
+      req.onerror = () => {
+        dbPromise = null;
+        reject(req.error);
+      };
     });
     return dbPromise;
   }
 
+  // Runs one IndexedDB operation, and if it fails because the cached
+  // connection had gone stale, drops the connection and retries exactly
+  // once on a fresh one rather than surfacing a misleading error.
+  async function withDB(run) {
+    try {
+      const db = await openDB();
+      return await run(db);
+    } catch (e) {
+      if (e && e.name === "InvalidStateError") {
+        dbPromise = null;
+        const db = await openDB();
+        return await run(db);
+      }
+      throw e;
+    }
+  }
+
   function idbGet(key) {
-    return openDB().then(
+    return withDB(
       (db) =>
         new Promise((resolve, reject) => {
           const req = db.transaction(DB_STORE, "readonly").objectStore(DB_STORE).get(key);
@@ -47,7 +79,7 @@
   }
 
   function idbSet(key, value) {
-    return openDB().then(
+    return withDB(
       (db) =>
         new Promise((resolve, reject) => {
           const tx = db.transaction(DB_STORE, "readwrite");
@@ -96,12 +128,19 @@
     }
   }
 
+  function describeStorageError(e) {
+    if (e && e.name === "QuotaExceededError") {
+      return "저장 공간이 부족해서 저장하지 못했습니다. 사진이 큰 카드를 정리해 보세요.";
+    }
+    return "일시적인 오류로 저장하지 못했습니다. 다시 시도해 주세요.";
+  }
+
   async function saveCards() {
     try {
       await idbSet(STORAGE_KEY, cards);
     } catch (e) {
       console.error("Failed to save cards", e);
-      showToast("저장 공간이 부족해서 저장하지 못했습니다. 사진이 큰 카드를 정리해 보세요.");
+      showToast(describeStorageError(e));
     }
   }
 
@@ -126,7 +165,7 @@
       await idbSet(FOLDERS_KEY, folders);
     } catch (e) {
       console.error("Failed to save folders", e);
-      showToast("저장 공간이 부족해서 저장하지 못했습니다.");
+      showToast(describeStorageError(e));
     }
   }
 
