@@ -727,29 +727,36 @@
   let editingId = null;
   let currentAnswerImage = null;
 
-  // Downscale + re-encode an uploaded photo so a multi-MB phone photo
-  // doesn't blow through localStorage's per-origin quota.
-  function loadPhotoAsDataURL(file, maxDim = 1000, quality = 0.85) {
+  // Downscale + re-encode a photo (from a data URL) so it stays reasonably
+  // small in storage. Reused both for a freshly uploaded photo and for the
+  // "compress existing photos" cleanup tool below.
+  function recompressDataURL(dataURL, maxDim = 800, quality = 0.7) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onerror = () => reject(new Error("invalid image"));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, w, h);
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = dataURL;
+    });
+  }
+
+  function loadPhotoAsDataURL(file, maxDim = 800, quality = 0.7) {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onerror = () => reject(reader.error);
       reader.onload = () => {
-        const img = new Image();
-        img.onerror = () => reject(new Error("invalid image"));
-        img.onload = () => {
-          const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-          const w = Math.round(img.width * scale);
-          const h = Math.round(img.height * scale);
-          const canvas = document.createElement("canvas");
-          canvas.width = w;
-          canvas.height = h;
-          const ctx = canvas.getContext("2d");
-          ctx.fillStyle = "#fff";
-          ctx.fillRect(0, 0, w, h);
-          ctx.drawImage(img, 0, 0, w, h);
-          resolve(canvas.toDataURL("image/jpeg", quality));
-        };
-        img.src = reader.result;
+        recompressDataURL(reader.result, maxDim, quality).then(resolve, reject);
       };
       reader.readAsDataURL(file);
     });
@@ -929,6 +936,43 @@
       cardListEl.appendChild(li);
     });
   }
+
+  // Re-encodes every card's stored photo at the current (smaller) size/
+  // quality settings, for users who saved cards before those defaults
+  // were tightened, or who just want to reclaim storage space without
+  // deleting any cards.
+  document.getElementById("btn-compress-photos").addEventListener("click", async () => {
+    const btn = document.getElementById("btn-compress-photos");
+    if (cards.length === 0) {
+      showToast("압축할 카드가 없습니다.");
+      return;
+    }
+    btn.disabled = true;
+    const originalLabel = btn.textContent;
+    btn.textContent = "압축 중...";
+
+    let beforeBytes = 0;
+    let afterBytes = 0;
+    for (const card of cards) {
+      beforeBytes += card.answerImage.length;
+      try {
+        const compressed = await recompressDataURL(card.answerImage);
+        if (compressed.length < card.answerImage.length) {
+          card.answerImage = compressed;
+        }
+      } catch (e) {
+        console.error("Failed to compress photo for card " + card.id, e);
+      }
+      afterBytes += card.answerImage.length;
+    }
+    await saveCards();
+    renderCardList();
+
+    btn.disabled = false;
+    btn.textContent = originalLabel;
+    const savedMB = (beforeBytes - afterBytes) / 1024 / 1024;
+    showToast(savedMB > 0.05 ? `압축 완료: 약 ${savedMB.toFixed(1)}MB 절약했습니다.` : "이미 충분히 압축되어 있습니다.");
+  });
 
   // ---------- Import / Export ----------
   document.getElementById("btn-export").addEventListener("click", () => {
