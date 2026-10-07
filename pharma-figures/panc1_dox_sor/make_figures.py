@@ -1,6 +1,6 @@
 """PANC-1 DOX+SOR 포스터 Fig 3–6 (CompuSyn 결과 그래프).
 
-수치는 인계 자료(PANC1_DOX_SOR_poster_handoff.md) 3장의 CompuSyn 결과를 그대로 쓴다.
+수치는 같은 폴더의 compusyn_report.html(CompuSyn Report)에서 compusyn_report.py로 읽는다.
 수치 그래프라서 matplotlib으로 그리되, 글꼴·색·dpi는 pharma-figures 세팅을 따른다.
   - 글꼴 Malgun Gothic(없으면 다른 한글 폰트), dpi 180
   - 색: 네이비 #1F3864, 주황 #E08E2B, 초록 #2E8B57, 빨강 #C0392B
@@ -20,6 +20,7 @@ from matplotlib import font_manager
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from graphviz_pathway import DPI, GREEN, NAVY, ORANGE, RED  # noqa: E402
+from compusyn_report import load_report  # noqa: E402
 
 FIG_SIZE_IN = (7.4, 5.47)  # 포스터 그림 칸 크기
 MIN_PRINT_PT = 8
@@ -54,39 +55,25 @@ plt.rcParams.update({
 SYNERGY_TINT = "#DCEFE3"   # 초록 #2E8B57의 옅은 바탕
 KEY_TINT = "#FCEBD5"       # 주황 #E08E2B의 옅은 바탕
 
-# ── CompuSyn 결과 (인계 자료 3장) ───────────────────────────────────
-PARAMS = {  # Dm(µg/mL), m
-    "SOR": (0.27714, 1.15661),
-    "DOX": (0.01958, 0.35984),
-    "DOX+SOR": (0.07739, 0.51683),  # 총농도 기준
-}
+# ── CompuSyn 결과: compusyn_report.html(CompuSyn Report 내보내기)에서 직접 읽는다 ──
+REPORT = load_report(OUT / "compusyn_report.html")
+PARAMS = {k: (v["Dm"], v["m"]) for k, v in REPORT["params"].items()}  # 병용은 총농도 기준
 OBS = {
-    "SOR": [(4e-4, .00765), (.0015, .06418), (.0058, 1e-5), (.0233, .26132), (.0933, .14835),
-            (.3733, .22856), (1.493, .44291), (5.9722, .84693), (23.8886, .99999), (95.5545, .99641)],
-    "DOX": [(3.3e-5, .20883), (1.33e-4, .23873), (5.3e-4, .22333), (.00212, .2109), (.0085, .22474),
-            (.034, .28595), (.1359, .50255), (.5437, .68225), (2.1749, .93857), (8.6997, .96074)],
-    # SOR 용량 기준 → 총농도(×1.2)로 바꿔서 그린다
-    "DOX+SOR": [(1.2e-4, .05113), (5e-4, .19308), (.002, .20483), (.0075, .22484), (.031, .24362),
-                (.1235, .2793), (.4935, .4367), (1.974, .57983), (7.895, .98683), (31.58, .98831)],
+    "SOR": REPORT["dose_effect"]["SOR"],
+    "DOX": REPORT["dose_effect"]["DOX"],
+    # 병용 실측점은 보고서의 Dose A(SOR) 대신 CI 표의 총농도(SOR+DOX)로 그린다
+    "DOX+SOR": [(total, fa) for total, fa, _ in REPORT["ci_points"]],
 }
-FA = np.array([.05, .10, .15, .20, .25, .30, .35, .40, .45, .50, .55, .60, .65, .70, .75, .80,
-               .85, .90, .95, .97])
-CI = np.array([7.92029, 4.23188, 2.88506, 2.17579, 1.73707, 1.44091, 1.23084, 1.07839, .96807,
-               .89144, .84454, .82695, .84201, .89846, 1.01473, 1.23047, 1.64196, 2.54716, 5.49282,
-               9.64148])
-CI_OBS = [(.05113, 4.11345), (.19308, .27799), (.20483, .90901), (.22484, 2.46716),
-          (.24362, 7.67604), (.2793, 18.5905), (.4367, 12.4462), (.57983, 13.6305),
-          (.98683, .6828), (.98831, 2.45954)]
-DRI_SOR = np.array([100.425, 45.1358, 27.5096, 18.9489, 13.9272, 10.6426, 8.33578, 6.63243,
-                    5.32696, 4.29738, 3.46679, 2.78442, 2.21544, 1.73524, 1.326, .97459, .67131,
-                    .40915, .18389, .1041])
-DRI_DOX = np.array([.12642, .23755, .35104, .47103, .6005, .74242, .90019, 1.07804, 1.28149,
-                    1.51804, 1.79826, 2.13764, 2.55996, 3.10396, 3.83754, 4.89239, 6.56472,
-                    9.70111, 18.229, 28.5547])
+FA, CI = np.array([(fa, ci) for fa, ci, _ in REPORT["ci_curve"]]).T
+CI_OBS = [(fa, ci) for _, fa, ci in REPORT["ci_points"]]
+_dri = np.array(REPORT["dri_curve"])
+DRI_FA, DRI_SOR, DRI_DOX = _dri[:, 0], _dri[:, 3], _dri[:, 4]
+_dri_obs = np.array(REPORT["dri_points"])
+DRI_OBS_FA, DRI_OBS_SOR, DRI_OBS_DOX = _dri_obs[:, 0], _dri_obs[:, 3], _dri_obs[:, 4]
 ISO = [  # (라벨, x = D(SOR)/Dx(SOR), y = D(DOX)/Dx(DOX), CI)
-    ("ED50", .06449 / .27714, .0129 / .01958, 0.89),
-    ("ED75", .54035 / .7165, .10807 / .41472, 1.01),
-    ("ED90", 4.5274 / 1.8524, .90548 / 8.78416, 2.55),
+    (f"ED{round(fa * 100)}", e["combo"]["SOR"] / e["Dx"]["SOR"],
+     e["combo"]["DOX"] / e["Dx"]["DOX"], e["CI"])
+    for fa, e in REPORT["ed"].items() if fa in (0.5, 0.75, 0.9)
 ]
 COLORS = {"SOR": NAVY, "DOX": RED, "DOX+SOR": GREEN}
 MARKERS = {"SOR": "o", "DOX": "s", "DOX+SOR": "^"}
@@ -122,11 +109,10 @@ def fig3_dose_effect():
     d = np.logspace(-5, np.log10(200), 400)
     for name in ("SOR", "DOX", "DOX+SOR"):
         dm, m = PARAMS[name]
-        scale = 1.2 if name == "DOX+SOR" else 1.0
         x, y = np.array(OBS[name]).T
         ax.plot(d, 1 / (1 + (dm / d) ** m), color=COLORS[name], lw=2.4,
                 label=name + (" (total dose)" if name == "DOX+SOR" else ""))
-        ax.scatter(x * scale, y, marker=MARKERS[name], s=70, facecolors="white",
+        ax.scatter(x, y, marker=MARKERS[name], s=70, facecolors="white",
                    edgecolors=COLORS[name], linewidths=2, zorder=3)
     ax.set_xscale("log")
     ax.set_xlim(1e-5, 200)
@@ -194,17 +180,24 @@ def fig6_dri_fa():
     fig, ax = _new_axes()
     ax.axvspan(0.4, 0.75, color=KEY_TINT, lw=0, zorder=0)
     ax.axhline(1, color=NAVY, lw=1.6, ls=(0, (2, 2)))
-    ax.plot(FA, DRI_SOR, color=NAVY, lw=2.6, label="DRI (SOR)")
-    ax.plot(FA, DRI_DOX, color=RED, lw=2.6, label="DRI (DOX)")
-    ax.text(0.575, 0.12, "Both DRI > 1\n(Fa 0.40–0.75)", color=NAVY, fontsize=ANNOT_PT,
-            ha="center", va="bottom")
+    ax.plot(DRI_FA, DRI_SOR, color=NAVY, lw=2.6, zorder=2)
+    ax.plot(DRI_FA, DRI_DOX, color=RED, lw=2.6, zorder=2)
+    # 실측점에서 계산한 DRI (CompuSyn "DRI values calculated at experimental points")
+    ax.scatter(DRI_OBS_FA, DRI_OBS_SOR, marker="o", s=70, facecolors="white", edgecolors=NAVY,
+               linewidths=2, zorder=3)
+    ax.scatter(DRI_OBS_FA, DRI_OBS_DOX, marker="s", s=70, facecolors="white", edgecolors=RED,
+               linewidths=2, zorder=3)
+    ax.text(0.575, 1100, "Model: both DRI > 1\n(Fa 0.40–0.75)", color=NAVY, fontsize=ANNOT_PT,
+            ha="center", va="center")
     ax.set_yscale("log")
-    ax.set_ylim(0.08, 150)
-    _log_ticks(ax, [0.1, 1, 10, 100])
-    ax.set_xlim(0, 1)
+    ax.set_ylim(0.03, 5000)
+    _log_ticks(ax, [0.1, 1, 10, 100, 1000])
+    ax.set_xlim(0, 1.02)
     ax.set_xlabel("Fa")
     ax.set_ylabel("DRI (log scale)")
-    ax.legend(loc="upper center", labelcolor=NAVY)
+    handles = [plt.Line2D([], [], color=c, lw=2.6, marker=mk, ms=9, mfc="white", mew=2)
+               for c, mk in ((NAVY, "o"), (RED, "s"))]
+    ax.legend(handles, ["DRI (SOR)", "DRI (DOX)"], loc="upper left", labelcolor=NAVY)
     return _save(fig, "fig6_dri_fa.png")
 
 
